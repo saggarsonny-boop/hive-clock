@@ -321,7 +321,7 @@ export default function HiveClock() {
   const shareObservance = () => {
     const label = selectedObservance === 'custom' ? customObservance : selectedObservance
     const lines = observanceTimes.map(t => `${t.name}: ${t.time}`).join('\n')
-    const text = `${label} times for ${observanceDate}\n\n${lines}\n\nvia HiveClock — hive-clock.vercel.app`
+    const text = `${label} times for ${observanceDate}\n\n${lines}\n\nvia HiveClock — hiveclock.hive.baby`
     if (navigator.share) {
       navigator.share({ title: `${label} times`, text })
     } else {
@@ -332,14 +332,14 @@ export default function HiveClock() {
   }
 
   const shareFace = () => {
-    const text = `I made this clock face with HiveClock 🕐✨\n\nGenerate yours free at hive-clock.vercel.app`
+    const text = `I made this clock face with HiveClock 🕐✨\n\nGenerate yours free at hiveclock.hive.baby`
     if (navigator.share && faceImage) {
       fetch(faceImage).then(r => r.blob()).then(blob => {
         const file = new File([blob], 'hiveclock-face.jpg', { type: 'image/jpeg' })
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           navigator.share({ title: 'My HiveClock face', text, files: [file] })
         } else {
-          navigator.share({ title: 'My HiveClock face', text, url: 'https://hive-clock.vercel.app' })
+          navigator.share({ title: 'My HiveClock face', text, url: 'https://hiveclock.hive.baby' })
         }
       })
     } else {
