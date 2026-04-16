@@ -45,7 +45,7 @@ function getMoonPhase() {
 
 function timeToPercent(timeStr: string): number {
   if (!timeStr) return 0
-  const clean = timeStr.replace(/[AP]M/i, '').trim()
+  const clean = timeStr.replace(/[APap][Mm]/g, '').trim()
   const parts = clean.split(':')
   let h = parseInt(parts[0])
   const m = parseInt(parts[1] || '0')
@@ -154,8 +154,17 @@ export default function HiveClock() {
       navigator.geolocation.getCurrentPosition(pos => {
         setUserLat(pos.coords.latitude)
         setUserLon(pos.coords.longitude)
-        fetch('/api/suntime', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude}) })
-          .then(r=>r.json()).then(d=>{
+        fetch('/api/suntime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+          })
+        })
+          .then(r => r.json())
+          .then(d => {
             if (d.sunrise) {
               setSunrise(d.sunrise)
               setSunset(d.sunset)
@@ -323,17 +332,17 @@ export default function HiveClock() {
             <div style={{position:'relative', height:'6px', background:'#0d1a2a', borderRadius:'8px'}}>
               <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
               {sunrisePercent > 0 && (
-                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-8px', transform:'translateX(-50%)', zIndex:2}}>
-                  <div style={{width:'3px', height:'22px', background:'#f9cb42', borderRadius:'2px', boxShadow:'0 0 6px #f9cb42'}}/>
+                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10, pointerEvents:'none'}}>
+                  <div style={{width:'3px', height:'26px', background:'#f9cb42', borderRadius:'2px', boxShadow:'0 0 8px #f9cb42', opacity:1}}/>
                 </div>
               )}
               {sunsetPercent > 0 && (
-                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-8px', transform:'translateX(-50%)', zIndex:2}}>
-                  <div style={{width:'3px', height:'22px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 6px #e8593c'}}/>
+                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10, pointerEvents:'none'}}>
+                  <div style={{width:'3px', height:'26px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 8px #e8593c', opacity:1}}/>
                 </div>
               )}
             </div>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'10px', marginTop:'8px'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'10px', marginTop:'10px'}}>
               <span style={{color:'#1a3a5c'}}>midnight</span>
               {sunrise && <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span>}
               <span style={{color:'#1a3a5c'}}>noon</span>
@@ -429,7 +438,7 @@ export default function HiveClock() {
             <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "steampunk gears" · "underwater coral"</div>
             {faceLimitReached ? (
               <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'20px', textAlign:'center', display:'flex', flexDirection:'column', gap:'12px'}}>
-                <p style={{color:'#c8e0f0', fontSize:'14px', margin:0}}>You've used your 3 free face generations today. Support HiveClock to generate more.</p>
+                <p style={{color:'#c8e0f0', fontSize:'14px', margin:0}}>You have used your 3 free face generations today. Support HiveClock to generate more.</p>
                 <div style={{display:'flex', gap:'8px', justifyContent:'center', flexWrap:'wrap'}}>
                   <a href='https://buy.stripe.com/14A6oJ6Mv3sReEa0YV0RG00' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$1.99 / month</a>
                   <a href='https://buy.stripe.com/7sYcN79YHe7v53AcHD0RG01' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$19 / year</a>
@@ -443,7 +452,7 @@ export default function HiveClock() {
                   style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
                 <div style={{display:'flex', gap:'8px'}}>
                   <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
-                    {faceLoading?`Generating... (up to 30s)`:`Generate face (${FACE_LIMIT - faceCount} left today)`}
+                    {faceLoading?'Generating... (up to 30s)':`Generate face (${FACE_LIMIT - faceCount} left today)`}
                   </button>
                   {faceLoading && (
                     <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
@@ -511,7 +520,7 @@ export default function HiveClock() {
           </div>
           {showSupport && (
             <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'20px', display:'flex', flexDirection:'column', gap:'12px'}}>
-              <p style={{color:'#4a7fa5', fontSize:'13px', margin:0}}>HiveClock is free forever. If it saves you time, consider supporting it.</p>
+              <p style={{color:'#4a7fa5', fontSize:'13px', margin:0}}>HiveClock is free. Always. We build for the community first. If it becomes part of your day, support it when you can.</p>
               <div style={{display:'flex', gap:'8px', flexWrap:'wrap'}}>
                 <a href='https://buy.stripe.com/14A6oJ6Mv3sReEa0YV0RG00' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$1.99 / month</a>
                 <a href='https://buy.stripe.com/7sYcN79YHe7v53AcHD0RG01' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$19 / year</a>
