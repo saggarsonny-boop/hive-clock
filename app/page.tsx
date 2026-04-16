@@ -55,6 +55,17 @@ function timeToPercent(timeStr: string): number {
   return (h * 60 + m) / 1440 * 100
 }
 
+function save(key: string, value: unknown) {
+  try { localStorage.setItem('hc_' + key, JSON.stringify(value)) } catch {}
+}
+
+function load<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem('hc_' + key)
+    return v !== null ? JSON.parse(v) : fallback
+  } catch { return fallback }
+}
+
 function AnalogClock({ time, accent, faceImage }: { time: Date, accent: string, faceImage: string }) {
   const h = ((time.getHours() % 12) + time.getMinutes() / 60) * 30
   const m = (time.getMinutes() + time.getSeconds() / 60) * 6
@@ -113,6 +124,7 @@ export default function HiveClock() {
   const [selectedObservance, setSelectedObservance] = useState('')
   const [observanceLoading, setObservanceLoading] = useState(false)
   const [customObservance, setCustomObservance] = useState('')
+  const [hydrated, setHydrated] = useState(false)
   const timerRef = useRef<NodeJS.Timeout|null>(null)
   const faceAbortRef = useRef<AbortController|null>(null)
 
@@ -141,16 +153,36 @@ export default function HiveClock() {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     setTimezone(tz)
     setMicroRitual(getMicroRitual(new Date().getHours()))
-    const savedCount = parseInt(localStorage.getItem('faceCount') || '0')
-    const savedDate = localStorage.getItem('faceDate') || ''
+
+    const savedIs24h = load('is24h', false)
+    const savedIsAnalog = load('isAnalog', false)
+    const savedCities = load('worldCities', DEFAULT_CITIES)
+    const savedFaceImage = load('faceImage', '')
+    const savedObservance = load('selectedObservance', '')
+    const savedCustomObservance = load('customObservance', '')
+    const savedTab = load('tab', 'clock')
+
+    setIs24h(savedIs24h)
+    setIsAnalog(savedIsAnalog)
+    setWorldCities(savedCities)
+    if (savedFaceImage) setFaceImage(savedFaceImage)
+    if (savedObservance) setSelectedObservance(savedObservance)
+    if (savedCustomObservance) setCustomObservance(savedCustomObservance)
+    setTab(savedTab as 'clock'|'world'|'timer'|'observance'|'face')
+
+    const savedCount = parseInt(load('faceCount', '0'))
+    const savedDate = load('faceDate', '')
     const today = new Date().toDateString()
     if (savedDate !== today) {
-      localStorage.setItem('faceCount', '0')
-      localStorage.setItem('faceDate', today)
+      save('faceCount', '0')
+      save('faceDate', today)
       setFaceCount(0)
     } else {
       setFaceCount(savedCount)
     }
+
+    setHydrated(true)
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
         setUserLat(pos.coords.latitude)
@@ -174,11 +206,44 @@ export default function HiveClock() {
               setSunsetPercent(timeToPercent(d.sunset))
             }
           })
-      }, () => {
-        setLocationGranted(false)
-      })
+      }, () => setLocationGranted(false))
     }
   }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('is24h', is24h)
+  }, [is24h, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('isAnalog', isAnalog)
+  }, [isAnalog, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('worldCities', worldCities)
+  }, [worldCities, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('faceImage', faceImage)
+  }, [faceImage, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('selectedObservance', selectedObservance)
+  }, [selectedObservance, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('customObservance', customObservance)
+  }, [customObservance, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    save('tab', tab)
+  }, [tab, hydrated])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -277,8 +342,8 @@ export default function HiveClock() {
         setIsAnalog(true)
         const newCount = faceCount + 1
         setFaceCount(newCount)
-        localStorage.setItem('faceCount', String(newCount))
-        localStorage.setItem('faceDate', new Date().toDateString())
+        save('faceCount', String(newCount))
+        save('faceDate', new Date().toDateString())
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') setFaceStopped(true)
