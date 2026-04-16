@@ -18,7 +18,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       quality: 'standard'
     })
 
-    const imageUrl = response.data[0]?.url
+    const imageUrl = response.data?.[0]?.url ?? null
     return NextResponse.json({ imageUrl })
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 })
