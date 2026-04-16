@@ -73,7 +73,7 @@ function AnalogClock({ time, accent, faceImage, size }: { time: Date, accent: st
   const cx = size / 2
   return (
     <div style={{position:'relative', width:`${size}px`, height:`${size}px`, margin:'0 auto'}}>
-      <div style={{position:'absolute', inset:0, borderRadius:'50%', border:`3px solid ${accent}`, background: faceImage ? `url(${faceImage}) center/cover` : '#0a1a2e', overflow:'hidden'}}>
+      <div style={{position:'absolute', inset:0, borderRadius:'50%', border:`3px solid`, borderColor:'var(--accent)', background: faceImage ? `url(${faceImage}) center/cover` : '#0a1a2e', overflow:'hidden'}}>
         {!faceImage && Array.from({length:12},(_,i) => (
           <div key={i} style={{position:'absolute', width:'2px', height:`${size*0.07}px`, background:accent, left:'50%', top:`${size*0.03}px`, transformOrigin:`1px ${size*0.47}px`, transform:`rotate(${i*30}deg)`, marginLeft:'-1px'}}/>
         ))}
@@ -127,7 +127,7 @@ export default function HiveClock() {
   const [selectedObservance, setSelectedObservance] = useState('')
   const [observanceLoading, setObservanceLoading] = useState(false)
   const [customObservance, setCustomObservance] = useState('')
-  const [hydrated, setHydrated] = useState(false)
+  const [ready, setReady] = useState(false)
   const timerRef = useRef<NodeJS.Timeout|null>(null)
   const faceAbortRef = useRef<AbortController|null>(null)
 
@@ -157,19 +157,15 @@ export default function HiveClock() {
     setTimezone(tz)
     setMicroRitual(getMicroRitual(new Date().getHours()))
 
-    const savedIs24h = load('is24h', false)
-    const savedIsAnalog = load('isAnalog', true)
-    const savedCities = load('worldCities', DEFAULT_CITIES)
-    const savedFaceImage = load('faceImage', '')
-    const savedObservance = load('selectedObservance', '')
-    const savedCustomObservance = load('customObservance', '')
-
-    setIs24h(savedIs24h)
-    setIsAnalog(savedIsAnalog)
-    setWorldCities(savedCities)
-    if (savedFaceImage) setFaceImage(savedFaceImage)
-    if (savedObservance) setSelectedObservance(savedObservance)
-    if (savedCustomObservance) setCustomObservance(savedCustomObservance)
+    setIs24h(load('is24h', false))
+    setIsAnalog(load('isAnalog', true))
+    setWorldCities(load('worldCities', DEFAULT_CITIES))
+    const fi = load('faceImage', '')
+    if (fi) setFaceImage(fi)
+    const so = load('selectedObservance', '')
+    if (so) setSelectedObservance(so)
+    const co = load('customObservance', '')
+    if (co) setCustomObservance(co)
 
     const savedCount = parseInt(load('faceCount', '0'))
     const savedDate = load('faceDate', '')
@@ -183,11 +179,9 @@ export default function HiveClock() {
     }
 
     const tooltipSeen = localStorage.getItem('hc_tooltip_seen')
-    if (!tooltipSeen) {
-      setTimeout(() => setShowTooltip(true), 3000)
-    }
+    if (!tooltipSeen) setTimeout(() => setShowTooltip(true), 3000)
 
-    setHydrated(true)
+    setReady(true)
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
@@ -197,31 +191,25 @@ export default function HiveClock() {
         fetch('/api/suntime', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            tz: Intl.DateTimeFormat().resolvedOptions().timeZone
-          })
+          body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude, tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
+        }).then(r => r.json()).then(d => {
+          if (d.sunrise) {
+            setSunrise(d.sunrise)
+            setSunset(d.sunset)
+            setSunrisePercent(timeToPercent(d.sunrise))
+            setSunsetPercent(timeToPercent(d.sunset))
+          }
         })
-          .then(r => r.json())
-          .then(d => {
-            if (d.sunrise) {
-              setSunrise(d.sunrise)
-              setSunset(d.sunset)
-              setSunrisePercent(timeToPercent(d.sunrise))
-              setSunsetPercent(timeToPercent(d.sunset))
-            }
-          })
       }, () => setLocationGranted(false))
     }
   }, [])
 
-  useEffect(() => { if (!hydrated) return; save('is24h', is24h) }, [is24h, hydrated])
-  useEffect(() => { if (!hydrated) return; save('isAnalog', isAnalog) }, [isAnalog, hydrated])
-  useEffect(() => { if (!hydrated) return; save('worldCities', worldCities) }, [worldCities, hydrated])
-  useEffect(() => { if (!hydrated) return; save('faceImage', faceImage) }, [faceImage, hydrated])
-  useEffect(() => { if (!hydrated) return; save('selectedObservance', selectedObservance) }, [selectedObservance, hydrated])
-  useEffect(() => { if (!hydrated) return; save('customObservance', customObservance) }, [customObservance, hydrated])
+  useEffect(() => { if (ready) save('is24h', is24h) }, [is24h, ready])
+  useEffect(() => { if (ready) save('isAnalog', isAnalog) }, [isAnalog, ready])
+  useEffect(() => { if (ready) save('worldCities', worldCities) }, [worldCities, ready])
+  useEffect(() => { if (ready) save('faceImage', faceImage) }, [faceImage, ready])
+  useEffect(() => { if (ready) save('selectedObservance', selectedObservance) }, [selectedObservance, ready])
+  useEffect(() => { if (ready) save('customObservance', customObservance) }, [customObservance, ready])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -355,6 +343,12 @@ export default function HiveClock() {
   const accent = getAccent()
   const faceLimitReached = faceCount >= FACE_LIMIT
 
+  if (!ready) return (
+    <main style={{minHeight:'100vh', background:'#060a14', display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div style={{color:'#1a3a5c', fontSize:'14px'}}>Loading...</div>
+    </main>
+  )
+
   return (
     <main style={{minHeight:'100vh', background:getBg(), color:'#e8f4ff', fontFamily:'system-ui, sans-serif', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 20px', transition:'background 2s'}}>
       <div style={{width:'100%', maxWidth:'620px', display:'flex', flexDirection:'column', gap:'20px'}}>
@@ -370,7 +364,7 @@ export default function HiveClock() {
           }
 
           {isAnalog && (
-            <div style={{fontSize:'28px', fontWeight:'700', letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums', marginTop:'16px', color:'#e8f4ff'}}>
+            <div style={{fontSize:'28px', fontWeight:'700', letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums', marginTop:'16px'}}>
               {formatTime(now)}
             </div>
           )}
@@ -379,10 +373,13 @@ export default function HiveClock() {
           <div style={{fontSize:'12px', color:'#2a4a6a', marginTop:'2px'}}>{timezone}</div>
 
           <div style={{display:'flex', gap:'8px', justifyContent:'center', marginTop:'10px'}}>
-            <button onClick={()=>setIsAnalog(!isAnalog)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color:accent, fontSize:'12px', cursor:'pointer'}}>
-              {isAnalog ? 'Digital' : 'Analog'}
+            <button onClick={()=>setIsAnalog(!isAnalog)} style={{background: isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: isAnalog ? '#fff' : accent, fontSize:'12px', cursor:'pointer'}}>
+              Analog
             </button>
-            <button onClick={()=>setIs24h(!is24h)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color:accent, fontSize:'12px', cursor:'pointer'}}>
+            <button onClick={()=>setIsAnalog(!isAnalog)} style={{background: !isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: !isAnalog ? '#fff' : '#4a7fa5', fontSize:'12px', cursor:'pointer'}}>
+              Digital
+            </button>
+            <button onClick={()=>setIs24h(!is24h)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color:'#4a7fa5', fontSize:'12px', cursor:'pointer'}}>
               {is24h ? '12h' : '24h'}
             </button>
           </div>
