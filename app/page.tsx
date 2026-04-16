@@ -66,21 +66,22 @@ function load<T>(key: string, fallback: T): T {
   } catch { return fallback }
 }
 
-function AnalogClock({ time, accent, faceImage }: { time: Date, accent: string, faceImage: string }) {
+function AnalogClock({ time, accent, faceImage, size }: { time: Date, accent: string, faceImage: string, size: number }) {
   const h = ((time.getHours() % 12) + time.getMinutes() / 60) * 30
   const m = (time.getMinutes() + time.getSeconds() / 60) * 6
   const s = time.getSeconds() * 6
+  const cx = size / 2
   return (
-    <div style={{position:'relative', width:'200px', height:'200px', margin:'0 auto'}}>
+    <div style={{position:'relative', width:`${size}px`, height:`${size}px`, margin:'0 auto'}}>
       <div style={{position:'absolute', inset:0, borderRadius:'50%', border:`3px solid ${accent}`, background: faceImage ? `url(${faceImage}) center/cover` : '#0a1a2e', overflow:'hidden'}}>
         {!faceImage && Array.from({length:12},(_,i) => (
-          <div key={i} style={{position:'absolute', width:'2px', height:'10px', background:accent, left:'50%', top:'8px', transformOrigin:'1px 92px', transform:`rotate(${i*30}deg)`, marginLeft:'-1px'}}/>
+          <div key={i} style={{position:'absolute', width:'2px', height:`${size*0.07}px`, background:accent, left:'50%', top:`${size*0.03}px`, transformOrigin:`1px ${size*0.47}px`, transform:`rotate(${i*30}deg)`, marginLeft:'-1px'}}/>
         ))}
       </div>
-      <div style={{position:'absolute', width:'3px', height:'60px', background:'#e8f4ff', left:'50%', top:'40px', transformOrigin:'1.5px 60px', transform:`rotate(${h}deg)`, marginLeft:'-1.5px', borderRadius:'2px'}}/>
-      <div style={{position:'absolute', width:'2px', height:'75px', background:accent, left:'50%', top:'25px', transformOrigin:'1px 75px', transform:`rotate(${m}deg)`, marginLeft:'-1px', borderRadius:'2px'}}/>
-      <div style={{position:'absolute', width:'1px', height:'80px', background:'#f87171', left:'50%', top:'20px', transformOrigin:'0.5px 80px', transform:`rotate(${s}deg)`, marginLeft:'-0.5px'}}/>
-      <div style={{position:'absolute', width:'8px', height:'8px', background:accent, borderRadius:'50%', left:'50%', top:'50%', transform:'translate(-50%,-50%)'}}/>
+      <div style={{position:'absolute', width:'4px', height:`${size*0.33}px`, background:'#e8f4ff', left:`${cx}px`, top:`${size*0.17}px`, transformOrigin:`2px ${size*0.33}px`, transform:`rotate(${h}deg)`, marginLeft:'-2px', borderRadius:'2px'}}/>
+      <div style={{position:'absolute', width:'3px', height:`${size*0.4}px`, background:accent, left:`${cx}px`, top:`${size*0.1}px`, transformOrigin:`1.5px ${size*0.4}px`, transform:`rotate(${m}deg)`, marginLeft:'-1.5px', borderRadius:'2px'}}/>
+      <div style={{position:'absolute', width:'2px', height:`${size*0.43}px`, background:'#f87171', left:`${cx}px`, top:`${size*0.07}px`, transformOrigin:`1px ${size*0.43}px`, transform:`rotate(${s}deg)`, marginLeft:'-1px'}}/>
+      <div style={{position:'absolute', width:'10px', height:'10px', background:accent, borderRadius:'50%', left:'50%', top:'50%', transform:'translate(-50%,-50%)'}}/>
     </div>
   )
 }
@@ -95,7 +96,9 @@ export default function HiveClock() {
   const [showSupport, setShowSupport] = useState(false)
   const [tab, setTab] = useState<'clock'|'world'|'timer'|'observance'|'face'>('clock')
   const [is24h, setIs24h] = useState(false)
-  const [isAnalog, setIsAnalog] = useState(false)
+  const [isAnalog, setIsAnalog] = useState(true)
+  const [showTabs, setShowTabs] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(false)
   const [worldCities, setWorldCities] = useState(DEFAULT_CITIES)
   const [worldTimes, setWorldTimes] = useState<{name:string,time:string,period:string}[]>([])
   const [cityInput, setCityInput] = useState('')
@@ -155,12 +158,11 @@ export default function HiveClock() {
     setMicroRitual(getMicroRitual(new Date().getHours()))
 
     const savedIs24h = load('is24h', false)
-    const savedIsAnalog = load('isAnalog', false)
+    const savedIsAnalog = load('isAnalog', true)
     const savedCities = load('worldCities', DEFAULT_CITIES)
     const savedFaceImage = load('faceImage', '')
     const savedObservance = load('selectedObservance', '')
     const savedCustomObservance = load('customObservance', '')
-    const savedTab = load('tab', 'clock')
 
     setIs24h(savedIs24h)
     setIsAnalog(savedIsAnalog)
@@ -168,7 +170,6 @@ export default function HiveClock() {
     if (savedFaceImage) setFaceImage(savedFaceImage)
     if (savedObservance) setSelectedObservance(savedObservance)
     if (savedCustomObservance) setCustomObservance(savedCustomObservance)
-    setTab(savedTab as 'clock'|'world'|'timer'|'observance'|'face')
 
     const savedCount = parseInt(load('faceCount', '0'))
     const savedDate = load('faceDate', '')
@@ -179,6 +180,11 @@ export default function HiveClock() {
       setFaceCount(0)
     } else {
       setFaceCount(savedCount)
+    }
+
+    const tooltipSeen = localStorage.getItem('hc_tooltip_seen')
+    if (!tooltipSeen) {
+      setTimeout(() => setShowTooltip(true), 3000)
     }
 
     setHydrated(true)
@@ -210,40 +216,12 @@ export default function HiveClock() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!hydrated) return
-    save('is24h', is24h)
-  }, [is24h, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('isAnalog', isAnalog)
-  }, [isAnalog, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('worldCities', worldCities)
-  }, [worldCities, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('faceImage', faceImage)
-  }, [faceImage, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('selectedObservance', selectedObservance)
-  }, [selectedObservance, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('customObservance', customObservance)
-  }, [customObservance, hydrated])
-
-  useEffect(() => {
-    if (!hydrated) return
-    save('tab', tab)
-  }, [tab, hydrated])
+  useEffect(() => { if (!hydrated) return; save('is24h', is24h) }, [is24h, hydrated])
+  useEffect(() => { if (!hydrated) return; save('isAnalog', isAnalog) }, [isAnalog, hydrated])
+  useEffect(() => { if (!hydrated) return; save('worldCities', worldCities) }, [worldCities, hydrated])
+  useEffect(() => { if (!hydrated) return; save('faceImage', faceImage) }, [faceImage, hydrated])
+  useEffect(() => { if (!hydrated) return; save('selectedObservance', selectedObservance) }, [selectedObservance, hydrated])
+  useEffect(() => { if (!hydrated) return; save('customObservance', customObservance) }, [customObservance, hydrated])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -368,6 +346,12 @@ export default function HiveClock() {
     setObservanceLoading(false)
   }
 
+  const dismissTooltip = () => {
+    localStorage.setItem('hc_tooltip_seen', 'true')
+    setShowTooltip(false)
+    setShowTabs(true)
+  }
+
   const accent = getAccent()
   const faceLimitReached = faceCount >= FACE_LIMIT
 
@@ -376,16 +360,22 @@ export default function HiveClock() {
       <div style={{width:'100%', maxWidth:'620px', display:'flex', flexDirection:'column', gap:'20px'}}>
 
         <div style={{textAlign:'center'}}>
-          <div style={{fontSize:'12px', color:accent, marginBottom:'8px'}}>
+          <div style={{fontSize:'12px', color:accent, marginBottom:'12px'}}>
             {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()}
           </div>
 
           {isAnalog
-            ? <AnalogClock time={now} accent={accent} faceImage={faceImage} />
+            ? <AnalogClock time={now} accent={accent} faceImage={faceImage} size={260} />
             : <div style={{fontSize:'clamp(48px,12vw,80px)', fontWeight:'700', letterSpacing:'-0.03em', fontVariantNumeric:'tabular-nums'}}>{formatTime(now)}</div>
           }
 
-          <div style={{fontSize:'15px', color:accent, marginTop:'8px'}}>{formatDate(now)}</div>
+          {isAnalog && (
+            <div style={{fontSize:'28px', fontWeight:'700', letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums', marginTop:'16px', color:'#e8f4ff'}}>
+              {formatTime(now)}
+            </div>
+          )}
+
+          <div style={{fontSize:'15px', color:accent, marginTop:'6px'}}>{formatDate(now)}</div>
           <div style={{fontSize:'12px', color:'#2a4a6a', marginTop:'2px'}}>{timezone}</div>
 
           <div style={{display:'flex', gap:'8px', justifyContent:'center', marginTop:'10px'}}>
@@ -397,7 +387,7 @@ export default function HiveClock() {
             </button>
           </div>
 
-          <div style={{marginTop:'16px', position:'relative', padding:'12px 0'}}>
+          <div style={{marginTop:'16px', position:'relative', padding:'8px 0'}}>
             <div style={{position:'relative', height:'6px', background:'#0d1a2a', borderRadius:'8px'}}>
               <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
               {sunrisePercent > 0 && (
@@ -415,168 +405,188 @@ export default function HiveClock() {
               <span style={{color:'#1a3a5c'}}>midnight</span>
               {sunrise ? <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>allow location for sunrise</span>}
               <span style={{color:'#1a3a5c'}}>noon</span>
-              {sunset ? <span style={{color:'#8b5cf6'}}>🌇 {sunset}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>and sunset times</span>}
+              {sunset ? <span style={{color:'#8b5cf6'}}>🌇 {sunset}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>and sunset</span>}
               <span style={{color:'#1a3a5c'}}>midnight</span>
             </div>
           </div>
 
-          <div style={{fontSize:'13px', color:'#2a5a7a', fontStyle:'italic'}}>{microRitual}</div>
+          <div style={{fontSize:'13px', color:'#2a5a7a', fontStyle:'italic', marginTop:'4px'}}>{microRitual}</div>
+
+          {!showTabs && (
+            <button onClick={()=>setShowTabs(true)} style={{marginTop:'20px', background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'8px 20px', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>
+              Explore features ↓
+            </button>
+          )}
         </div>
 
-        <div style={{display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap'}}>
-          {(['clock','world','timer','observance','face'] as const).map(t => (
-            <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 14px', borderRadius:'20px', border:'none', background:tab===t?accent:'#0d1f35', color:tab===t?'#fff':'#4a7fa5', fontSize:'12px', cursor:'pointer', fontWeight:tab===t?'600':'400'}}>
-              {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':t==='observance'?'🕌 Observance':'🎨 Face'}
-            </button>
-          ))}
-        </div>
-
-        {tab==='clock' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-            <div style={{fontSize:'12px', color:'#2a4a6a', textAlign:'center'}}>Ask in any language — try: "¿Qué hora es en Buenos Aires?" or "몇 시예요?"</div>
-            <input type='text' value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAsk()} placeholder={EXAMPLES[exampleIndex]}
-              style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
-            <button onClick={handleAsk} disabled={loading||!input.trim()} style={{background:loading||!input.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:loading||!input.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:loading||!input.trim()?'not-allowed':'pointer'}}>
-              {loading?'Thinking...':'Ask'}
-            </button>
-            {answer && (
-              <div style={{background:'#0a1a2e', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'24px', display:'flex', flexDirection:'column', gap:'12px'}}>
-                <p style={{color:'#c8e0f0', fontSize:'17px', lineHeight:'1.7', margin:0}}>{answer}</p>
-                <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
-                  <button onClick={()=>navigator.clipboard.writeText(answer)} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer', padding:0}}>Copy</button>
-                  {suggestion && <button onClick={()=>{setInput(suggestion);setAnswer('')}} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'8px', color:accent, fontSize:'12px', cursor:'pointer', padding:'4px 10px'}}>Try: {suggestion}</button>}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab==='world' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-              {worldTimes.map(c => (
-                <div key={c.name} style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'14px', padding:'14px 18px', position:'relative'}}>
-                  <button onClick={()=>setWorldCities(prev=>prev.filter(w=>w.name!==c.name))} style={{position:'absolute', top:'8px', right:'8px', background:'none', border:'none', color:'#1a3a5c', cursor:'pointer', fontSize:'14px'}}>×</button>
-                  <div style={{fontSize:'12px', color:'#2a5a7a', marginBottom:'4px'}}>{c.period==='night'?'🌙':'☀️'} {c.name}</div>
-                  <div style={{fontSize:'26px', fontWeight:'700', fontVariantNumeric:'tabular-nums'}}>{c.time}</div>
-                </div>
-              ))}
+        {showTooltip && (
+          <div style={{background:'#0a1a2e', border:`1px solid ${accent}`, borderRadius:'16px', padding:'16px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'16px'}}>
+            <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+              <span style={{color:'#c8e0f0', fontSize:'14px', fontWeight:'600'}}>Ask me anything about time</span>
+              <span style={{color:'#4a7fa5', fontSize:'12px'}}>Try: "What time is it in Tokyo?" or "How long until midnight?" — in any language</span>
             </div>
-            <div style={{display:'flex', gap:'8px'}}>
-              <input type='text' value={cityInput} onChange={e=>setCityInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCity()} placeholder='Add any city in the world...'
-                style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
-              <button onClick={addCity} disabled={cityLoading||!cityInput.trim()} style={{background:cityLoading?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'70px'}}>
-                {cityLoading?'...':'Add'}
-              </button>
-            </div>
-            <div style={{fontSize:'11px', color:'#1a3a5c', textAlign:'center'}}>Type any city, town, or place — AI finds the timezone</div>
+            <button onClick={dismissTooltip} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'20px', cursor:'pointer', padding:'4px', flexShrink:0}}>×</button>
           </div>
         )}
 
-        {tab==='timer' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'16px', alignItems:'center'}}>
-            {!timerRunning && timerSeconds===0 && !timerDone && (
-              <div style={{display:'flex', gap:'8px', width:'100%'}}>
-                <input type='text' value={timerInput} onChange={e=>setTimerInput(e.target.value)} placeholder='5 (mins) or 1:30 or 0:05:00'
-                  style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none'}}/>
-                <button onClick={startTimer} style={{background:`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:'pointer'}}>Start</button>
-              </div>
-            )}
-            {(timerRunning||timerSeconds>0) && !timerDone && (
-              <div style={{textAlign:'center'}}>
-                <div style={{fontSize:'72px', fontWeight:'700', fontVariantNumeric:'tabular-nums', color:timerSeconds<10?'#f87171':'#e8f4ff'}}>{formatTimer(timerSeconds)}</div>
-                <div style={{display:'flex', gap:'12px', justifyContent:'center', marginTop:'16px'}}>
-                  <button onClick={()=>setTimerRunning(!timerRunning)} style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'12px', padding:'10px 24px', color:accent, fontSize:'15px', cursor:'pointer'}}>{timerRunning?'Pause':'Resume'}</button>
-                  <button onClick={()=>{setTimerSeconds(0);setTimerRunning(false);setTimerDone(false)}} style={{background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'10px 24px', color:'#4a7fa5', fontSize:'15px', cursor:'pointer'}}>Reset</button>
-                </div>
-              </div>
-            )}
-            {timerDone && (
-              <div style={{textAlign:'center'}}>
-                <div style={{fontSize:'48px', marginBottom:'8px'}}>⏰</div>
-                <div style={{fontSize:'24px', fontWeight:'700'}}>Time is up.</div>
-                <button onClick={()=>{setTimerSeconds(0);setTimerDone(false)}} style={{marginTop:'16px', background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'12px', padding:'10px 24px', color:accent, fontSize:'15px', cursor:'pointer'}}>New timer</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab==='observance' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
-            {!locationGranted && <div style={{fontSize:'12px', color:'#c87a20', textAlign:'center', background:'#1a0f00', borderRadius:'10px', padding:'10px'}}>Allow location access in your browser for precise observance times</div>}
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-              {PRESET_OBSERVANCES.map(o => (
-                <button key={o.id} onClick={()=>loadObservance(o.id)}
-                  style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
-                  <span style={{fontSize:'22px'}}>{o.emoji}</span>
-                  <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
-                  <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
+        {showTabs && (
+          <>
+            <div style={{display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap'}}>
+              {(['clock','world','timer','observance','face'] as const).map(t => (
+                <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 14px', borderRadius:'20px', border:'none', background:tab===t?accent:'#0d1f35', color:tab===t?'#fff':'#4a7fa5', fontSize:'12px', cursor:'pointer', fontWeight:tab===t?'600':'400'}}>
+                  {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':t==='observance'?'🕌 Observance':'🎨 Face'}
                 </button>
               ))}
             </div>
-            <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
-              <div style={{fontSize:'12px', color:'#2a5a7a'}}>Or describe your own observance, practice, or tradition:</div>
-              <div style={{display:'flex', gap:'8px'}}>
-                <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
-                  style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
-                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'80px'}}>
-                  {observanceLoading?'...':'Look up'}
-                </button>
-              </div>
-            </div>
-            {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
-            {observanceTimes.length > 0 && (
-              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
-                <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
-                {observanceTimes.map((t, i) => (
-                  <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
-                    <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
-                    <span style={{color:accent, fontSize:'15px', fontWeight:'600', fontVariantNumeric:'tabular-nums'}}>{t.time}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
-        {tab==='face' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI generates it and applies it instantly.</div>
-            <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "steampunk gears" · "underwater coral"</div>
-            {faceLimitReached ? (
-              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'20px', textAlign:'center', display:'flex', flexDirection:'column', gap:'12px'}}>
-                <p style={{color:'#c8e0f0', fontSize:'14px', margin:0}}>You have used your 3 free face generations today. Support HiveClock to generate more.</p>
-                <div style={{display:'flex', gap:'8px', justifyContent:'center', flexWrap:'wrap'}}>
-                  <a href='https://buy.stripe.com/14A6oJ6Mv3sReEa0YV0RG00' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$1.99 / month</a>
-                  <a href='https://buy.stripe.com/7sYcN79YHe7v53AcHD0RG01' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$19 / year</a>
-                  <a href='https://buy.stripe.com/9B6aEZ7Qzd3rcw2bDz0RG02' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$5 one-time</a>
-                </div>
-                <p style={{color:'#2a5a7a', fontSize:'12px', margin:0}}>Resets tomorrow. Everything else on HiveClock is always free.</p>
-              </div>
-            ) : (
-              <>
-                <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!faceLoading&&handleGenerateFace()} placeholder='Describe your clock face...'
+            {tab==='clock' && (
+              <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+                <div style={{fontSize:'12px', color:'#2a4a6a', textAlign:'center'}}>Ask in any language — try: "¿Qué hora es en Buenos Aires?" or "몇 시예요?"</div>
+                <input type='text' value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAsk()} placeholder={EXAMPLES[exampleIndex]}
                   style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
-                <div style={{display:'flex', gap:'8px'}}>
-                  <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
-                    {faceLoading?'Generating... (up to 30s)':`Generate face (${FACE_LIMIT - faceCount} left today)`}
-                  </button>
-                  {faceLoading && (
-                    <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
-                  )}
-                </div>
-                {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
-              </>
-            )}
-            {faceImage && (
-              <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
-                <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
-                <div style={{fontSize:'12px', color:'#4a7fa5'}}>Applied to your analog clock ✓</div>
-                <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
+                <button onClick={handleAsk} disabled={loading||!input.trim()} style={{background:loading||!input.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:loading||!input.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:loading||!input.trim()?'not-allowed':'pointer'}}>
+                  {loading?'Thinking...':'Ask'}
+                </button>
+                {answer && (
+                  <div style={{background:'#0a1a2e', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'24px', display:'flex', flexDirection:'column', gap:'12px'}}>
+                    <p style={{color:'#c8e0f0', fontSize:'17px', lineHeight:'1.7', margin:0}}>{answer}</p>
+                    <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
+                      <button onClick={()=>navigator.clipboard.writeText(answer)} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer', padding:0}}>Copy</button>
+                      {suggestion && <button onClick={()=>{setInput(suggestion);setAnswer('')}} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'8px', color:accent, fontSize:'12px', cursor:'pointer', padding:'4px 10px'}}>Try: {suggestion}</button>}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+
+            {tab==='world' && (
+              <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                  {worldTimes.map(c => (
+                    <div key={c.name} style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'14px', padding:'14px 18px', position:'relative'}}>
+                      <button onClick={()=>setWorldCities(prev=>prev.filter(w=>w.name!==c.name))} style={{position:'absolute', top:'8px', right:'8px', background:'none', border:'none', color:'#1a3a5c', cursor:'pointer', fontSize:'14px'}}>×</button>
+                      <div style={{fontSize:'12px', color:'#2a5a7a', marginBottom:'4px'}}>{c.period==='night'?'🌙':'☀️'} {c.name}</div>
+                      <div style={{fontSize:'26px', fontWeight:'700', fontVariantNumeric:'tabular-nums'}}>{c.time}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{display:'flex', gap:'8px'}}>
+                  <input type='text' value={cityInput} onChange={e=>setCityInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCity()} placeholder='Add any city in the world...'
+                    style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
+                  <button onClick={addCity} disabled={cityLoading||!cityInput.trim()} style={{background:cityLoading?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'70px'}}>
+                    {cityLoading?'...':'Add'}
+                  </button>
+                </div>
+                <div style={{fontSize:'11px', color:'#1a3a5c', textAlign:'center'}}>Type any city, town, or place — AI finds the timezone</div>
+              </div>
+            )}
+
+            {tab==='timer' && (
+              <div style={{display:'flex', flexDirection:'column', gap:'16px', alignItems:'center'}}>
+                {!timerRunning && timerSeconds===0 && !timerDone && (
+                  <div style={{display:'flex', gap:'8px', width:'100%'}}>
+                    <input type='text' value={timerInput} onChange={e=>setTimerInput(e.target.value)} placeholder='5 (mins) or 1:30 or 0:05:00'
+                      style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none'}}/>
+                    <button onClick={startTimer} style={{background:`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:'pointer'}}>Start</button>
+                  </div>
+                )}
+                {(timerRunning||timerSeconds>0) && !timerDone && (
+                  <div style={{textAlign:'center'}}>
+                    <div style={{fontSize:'72px', fontWeight:'700', fontVariantNumeric:'tabular-nums', color:timerSeconds<10?'#f87171':'#e8f4ff'}}>{formatTimer(timerSeconds)}</div>
+                    <div style={{display:'flex', gap:'12px', justifyContent:'center', marginTop:'16px'}}>
+                      <button onClick={()=>setTimerRunning(!timerRunning)} style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'12px', padding:'10px 24px', color:accent, fontSize:'15px', cursor:'pointer'}}>{timerRunning?'Pause':'Resume'}</button>
+                      <button onClick={()=>{setTimerSeconds(0);setTimerRunning(false);setTimerDone(false)}} style={{background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'10px 24px', color:'#4a7fa5', fontSize:'15px', cursor:'pointer'}}>Reset</button>
+                    </div>
+                  </div>
+                )}
+                {timerDone && (
+                  <div style={{textAlign:'center'}}>
+                    <div style={{fontSize:'48px', marginBottom:'8px'}}>⏰</div>
+                    <div style={{fontSize:'24px', fontWeight:'700'}}>Time is up.</div>
+                    <button onClick={()=>{setTimerSeconds(0);setTimerDone(false)}} style={{marginTop:'16px', background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'12px', padding:'10px 24px', color:accent, fontSize:'15px', cursor:'pointer'}}>New timer</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab==='observance' && (
+              <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+                <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
+                {!locationGranted && <div style={{fontSize:'12px', color:'#c87a20', textAlign:'center', background:'#1a0f00', borderRadius:'10px', padding:'10px'}}>Allow location access for precise observance times</div>}
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                  {PRESET_OBSERVANCES.map(o => (
+                    <button key={o.id} onClick={()=>loadObservance(o.id)}
+                      style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
+                      <span style={{fontSize:'22px'}}>{o.emoji}</span>
+                      <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
+                      <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                  <div style={{fontSize:'12px', color:'#2a5a7a'}}>Or describe your own observance, practice, or tradition:</div>
+                  <div style={{display:'flex', gap:'8px'}}>
+                    <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
+                      style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
+                    <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'80px'}}>
+                      {observanceLoading?'...':'Look up'}
+                    </button>
+                  </div>
+                </div>
+                {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
+                {observanceTimes.length > 0 && (
+                  <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
+                    <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
+                    {observanceTimes.map((t, i) => (
+                      <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
+                        <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
+                        <span style={{color:accent, fontSize:'15px', fontWeight:'600', fontVariantNumeric:'tabular-nums'}}>{t.time}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab==='face' && (
+              <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+                <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI generates it and applies it instantly.</div>
+                <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "steampunk gears"</div>
+                {faceLimitReached ? (
+                  <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'20px', textAlign:'center', display:'flex', flexDirection:'column', gap:'12px'}}>
+                    <p style={{color:'#c8e0f0', fontSize:'14px', margin:0}}>You have used your 3 free face generations today. Support HiveClock to generate more.</p>
+                    <div style={{display:'flex', gap:'8px', justifyContent:'center', flexWrap:'wrap'}}>
+                      <a href='https://buy.stripe.com/14A6oJ6Mv3sReEa0YV0RG00' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$1.99 / month</a>
+                      <a href='https://buy.stripe.com/7sYcN79YHe7v53AcHD0RG01' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$19 / year</a>
+                      <a href='https://buy.stripe.com/9B6aEZ7Qzd3rcw2bDz0RG02' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$5 one-time</a>
+                    </div>
+                    <p style={{color:'#2a5a7a', fontSize:'12px', margin:0}}>Resets tomorrow. Everything else on HiveClock is always free.</p>
+                  </div>
+                ) : (
+                  <>
+                    <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!faceLoading&&handleGenerateFace()} placeholder='Describe your clock face...'
+                      style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
+                    <div style={{display:'flex', gap:'8px'}}>
+                      <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
+                        {faceLoading?'Generating... (up to 30s)':`Generate face (${FACE_LIMIT - faceCount} left today)`}
+                      </button>
+                      {faceLoading && (
+                        <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
+                      )}
+                    </div>
+                    {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
+                  </>
+                )}
+                {faceImage && (
+                  <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
+                    <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
+                    <div style={{fontSize:'12px', color:'#4a7fa5'}}>Applied to your analog clock ✓</div>
+                    <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'12px'}}>
