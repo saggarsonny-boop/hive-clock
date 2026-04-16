@@ -26,11 +26,11 @@ const DEFAULT_CITIES = [
 
 const MOON_PHASES = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘']
 
-const OBSERVANCES = [
-  { id: 'islam', label: 'Islam', emoji: '☪️', description: 'Daily prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha)' },
-  { id: 'judaism', label: 'Judaism', emoji: '✡️', description: 'Shabbat candle lighting and Havdalah times' },
-  { id: 'sunrise', label: 'Sun follower', emoji: '🌞', description: 'Sunrise, solar noon, sunset, twilight' },
-  { id: 'moon', label: 'Lunar', emoji: '🌕', description: 'Moon phases and lunar calendar' },
+const PRESET_OBSERVANCES = [
+  { id: 'islam', label: 'Islam', emoji: '☪️', description: 'Five daily prayer times' },
+  { id: 'judaism', label: 'Judaism', emoji: '✡️', description: 'Shabbat and Havdalah times' },
+  { id: 'sunrise', label: 'Sun follower', emoji: '🌞', description: 'Full solar day breakdown' },
+  { id: 'moon', label: 'Lunar', emoji: '🌕', description: 'Moon phase and cycle' },
 ]
 
 function getMoonPhase() {
@@ -39,6 +39,17 @@ function getMoonPhase() {
   const diff = (now.getTime() - known.getTime()) / (1000 * 60 * 60 * 24)
   const cycle = diff % 29.53
   return MOON_PHASES[Math.floor(cycle / 29.53 * 8)]
+}
+
+function timeToPercent(timeStr: string): number {
+  if (!timeStr) return 0
+  const parts = timeStr.split(':')
+  let h = parseInt(parts[0])
+  const m = parseInt(parts[1] || '0')
+  const ampm = timeStr.toLowerCase()
+  if (ampm.includes('pm') && h !== 12) h += 12
+  if (ampm.includes('am') && h === 12) h = 0
+  return (h * 60 + m) / 1440 * 100
 }
 
 function AnalogClock({ time, accent, faceImage }: { time: Date, accent: string, faceImage: string }) {
@@ -83,6 +94,8 @@ export default function HiveClock() {
   const [mode, setMode] = useState<'day'|'wind'|'wake'>('day')
   const [sunrise, setSunrise] = useState('')
   const [sunset, setSunset] = useState('')
+  const [sunrisePercent, setSunrisePercent] = useState(25)
+  const [sunsetPercent, setSunsetPercent] = useState(75)
   const [facePrompt, setFacePrompt] = useState('')
   const [faceImage, setFaceImage] = useState('')
   const [faceLoading, setFaceLoading] = useState(false)
@@ -94,6 +107,7 @@ export default function HiveClock() {
   const [observanceTimes, setObservanceTimes] = useState<{name:string,time:string}[]>([])
   const [selectedObservance, setSelectedObservance] = useState('')
   const [observanceLoading, setObservanceLoading] = useState(false)
+  const [customObservance, setCustomObservance] = useState('')
   const timerRef = useRef<NodeJS.Timeout|null>(null)
   const faceAbortRef = useRef<AbortController|null>(null)
 
@@ -127,7 +141,14 @@ export default function HiveClock() {
         setUserLat(pos.coords.latitude)
         setUserLon(pos.coords.longitude)
         fetch('/api/suntime', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude}) })
-          .then(r=>r.json()).then(d=>{ if(d.sunrise){ setSunrise(d.sunrise); setSunset(d.sunset) } })
+          .then(r=>r.json()).then(d=>{
+            if (d.sunrise) {
+              setSunrise(d.sunrise)
+              setSunset(d.sunset)
+              setSunrisePercent(timeToPercent(d.sunrise))
+              setSunsetPercent(timeToPercent(d.sunset))
+            }
+          })
       })
     }
   }, [])
@@ -219,8 +240,7 @@ export default function HiveClock() {
     faceAbortRef.current = new AbortController()
     try {
       const res = await fetch('/api/clockface', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({prompt: facePrompt}),
         signal: faceAbortRef.current.signal
       })
@@ -234,20 +254,15 @@ export default function HiveClock() {
 
   const handleStopFace = () => {
     faceAbortRef.current?.abort()
-    setFaceLoading(false)
-    setFaceStopped(true)
+    setFaceLoading(false); setFaceStopped(true)
   }
 
-  const loadObservance = async (id: string) => {
-    if (!userLat || !userLon) {
-      alert('Please allow location access to use observance times')
-      return
-    }
+  const loadObservance = async (id: string, custom?: string) => {
+    if (!userLat || !userLon) { alert('Please allow location access to use observance times'); return }
     setSelectedObservance(id)
-    setObservanceLoading(true)
-    setObservanceTimes([])
+    setObservanceLoading(true); setObservanceTimes([])
     try {
-      const res = await fetch('/api/observance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:userLat, lon:userLon, tradition:id}) })
+      const res = await fetch('/api/observance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:userLat, lon:userLon, tradition:id, custom}) })
       const data = await res.json()
       if (data.times) setObservanceTimes(data.times)
     } catch {}
@@ -262,7 +277,7 @@ export default function HiveClock() {
 
         <div style={{textAlign:'center'}}>
           <div style={{fontSize:'12px', color:accent, marginBottom:'8px'}}>
-            {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()} {sunrise && `· ☀️ ${sunrise} 🌇 ${sunset}`}
+            {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()}
           </div>
 
           {isAnalog
@@ -282,11 +297,27 @@ export default function HiveClock() {
             </button>
           </div>
 
-          <div style={{marginTop:'12px', background:'#0d1a2a', borderRadius:'8px', height:'5px', overflow:'hidden'}}>
-            <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
-          </div>
-          <div style={{display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#1a3a5c', marginTop:'3px'}}>
-            <span>midnight</span><span>noon</span><span>midnight</span>
+          <div style={{marginTop:'12px', position:'relative'}}>
+            <div style={{background:'#0d1a2a', borderRadius:'8px', height:'6px', overflow:'visible', position:'relative'}}>
+              <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
+              {sunrise && (
+                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-4px', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center'}}>
+                  <div style={{width:'2px', height:'14px', background:'#f9cb42', borderRadius:'1px'}}/>
+                </div>
+              )}
+              {sunset && (
+                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-4px', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center'}}>
+                  <div style={{width:'2px', height:'14px', background:'#c87a20', borderRadius:'1px'}}/>
+                </div>
+              )}
+            </div>
+            <div style={{display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#1a3a5c', marginTop:'4px'}}>
+              <span>midnight</span>
+              {sunrise && <span style={{color:'#f9cb42', fontSize:'10px'}}>☀️ {sunrise}</span>}
+              <span>noon</span>
+              {sunset && <span style={{color:'#c87a20', fontSize:'10px'}}>🌇 {sunset}</span>}
+              <span>midnight</span>
+            </div>
           </div>
 
           <div style={{marginTop:'10px', fontSize:'13px', color:'#2a5a7a', fontStyle:'italic'}}>{microRitual}</div>
@@ -338,7 +369,7 @@ export default function HiveClock() {
                 {cityLoading?'...':'Add'}
               </button>
             </div>
-            <div style={{fontSize:'11px', color:'#1a3a5c', textAlign:'center'}}>Type any city, town, or place — AI will find the timezone</div>
+            <div style={{fontSize:'11px', color:'#1a3a5c', textAlign:'center'}}>Type any city, town, or place — AI finds the timezone</div>
           </div>
         )}
 
@@ -381,9 +412,7 @@ export default function HiveClock() {
                 {faceLoading?'Generating... (up to 30s)':'Generate face'}
               </button>
               {faceLoading && (
-                <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>
-                  Stop
-                </button>
+                <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
               )}
             </div>
             {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
@@ -399,20 +428,31 @@ export default function HiveClock() {
 
         {tab==='observance' && (
           <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance for precise times based on your location.</div>
+            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-              {OBSERVANCES.map(o => (
+              {PRESET_OBSERVANCES.map(o => (
                 <button key={o.id} onClick={()=>loadObservance(o.id)}
                   style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
-                  <span style={{fontSize:'24px'}}>{o.emoji}</span>
+                  <span style={{fontSize:'22px'}}>{o.emoji}</span>
                   <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
                   <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
                 </button>
               ))}
             </div>
+            <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
+              <div style={{fontSize:'12px', color:'#2a5a7a'}}>Or describe your own observance, practice, or tradition:</div>
+              <div style={{display:'flex', gap:'8px'}}>
+                <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
+                  style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
+                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'70px'}}>
+                  {observanceLoading?'...':'Look up'}
+                </button>
+              </div>
+            </div>
             {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
             {observanceTimes.length > 0 && (
               <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
+                <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
                 {observanceTimes.map((t, i) => (
                   <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
                     <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
@@ -427,9 +467,9 @@ export default function HiveClock() {
 
         <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'12px'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-            <span style={{fontSize:'12px', color:'#1a3a5c'}}>HiveClock — by Hive</span>
+            <a href='https://hive.baby' style={{fontSize:'12px', color:'#2a5a7a', textDecoration:'none', fontWeight:'500'}}>HiveClock</a>
             <div style={{display:'flex', gap:'12px'}}>
-              <a href='#' style={{fontSize:'12px', color:'#1a3a5c', textDecoration:'none'}}>Try HiveWeather →</a>
+              <a href='https://hive.baby' style={{fontSize:'12px', color:'#1a3a5c', textDecoration:'none'}}>Explore Hive →</a>
               <button onClick={()=>setShowSupport(!showSupport)} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'12px', cursor:'pointer', padding:0}}>{showSupport?'Close':'Support this engine'}</button>
             </div>
           </div>
