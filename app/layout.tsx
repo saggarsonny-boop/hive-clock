@@ -11,7 +11,8 @@ export const metadata: Metadata = {
     title: 'HiveClock',
   },
   icons: {
-    apple: '/icon-192.png',
+    icon: '/icon.svg',
+    apple: '/icon.svg',
   },
 }
 
