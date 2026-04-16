@@ -13,19 +13,13 @@ const EXAMPLES = [
   'كم الساعة الآن في دبي؟',
 ]
 
-const ALL_CITIES = [
+const DEFAULT_CITIES = [
   { name: 'London', tz: 'Europe/London' },
   { name: 'New York', tz: 'America/New_York' },
   { name: 'Tokyo', tz: 'Asia/Tokyo' },
   { name: 'Dubai', tz: 'Asia/Dubai' },
   { name: 'Sydney', tz: 'Australia/Sydney' },
   { name: 'Paris', tz: 'Europe/Paris' },
-  { name: 'Mumbai', tz: 'Asia/Kolkata' },
-  { name: 'Lagos', tz: 'Africa/Lagos' },
-  { name: 'São Paulo', tz: 'America/Sao_Paulo' },
-  { name: 'Los Angeles', tz: 'America/Los_Angeles' },
-  { name: 'Chicago', tz: 'America/Chicago' },
-  { name: 'Singapore', tz: 'Asia/Singapore' },
 ]
 
 const MOON_PHASES = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘']
@@ -68,9 +62,10 @@ export default function HiveClock() {
   const [tab, setTab] = useState<'clock'|'world'|'timer'|'face'>('clock')
   const [is24h, setIs24h] = useState(false)
   const [isAnalog, setIsAnalog] = useState(false)
-  const [worldCities, setWorldCities] = useState(ALL_CITIES.slice(0,6))
-  const [showCityPicker, setShowCityPicker] = useState(false)
+  const [worldCities, setWorldCities] = useState(DEFAULT_CITIES)
   const [worldTimes, setWorldTimes] = useState<{name:string,time:string,period:string}[]>([])
+  const [cityInput, setCityInput] = useState('')
+  const [cityLoading, setCityLoading] = useState(false)
   const [timerInput, setTimerInput] = useState('')
   const [timerSeconds, setTimerSeconds] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
@@ -97,27 +92,26 @@ export default function HiveClock() {
     return '#4a7fa5'
   }
 
-  const getMicroRitual = () => {
-    const hour = now.getHours()
-    if (hour >= 5 && hour < 9) return 'Morning light. One breath before the day begins.'
-    if (hour >= 9 && hour < 12) return 'The day is moving. You are in it.'
-    if (hour >= 12 && hour < 14) return 'Midday. A moment to reset.'
-    if (hour >= 14 && hour < 17) return 'Afternoon. Steady on.'
-    if (hour >= 17 && hour < 20) return 'The day is winding. You made it this far.'
-    if (hour >= 20 && hour < 23) return 'Evening. Let the day go.'
+  const getMicroRitual = (h: number) => {
+    if (h >= 5 && h < 9) return 'Morning light. One breath before the day begins.'
+    if (h >= 9 && h < 12) return 'The day is moving. You are in it.'
+    if (h >= 12 && h < 14) return 'Midday. A moment to reset.'
+    if (h >= 14 && h < 17) return 'Afternoon. Steady on.'
+    if (h >= 17 && h < 20) return 'The day is winding. You made it this far.'
+    if (h >= 20 && h < 23) return 'Evening. Let the day go.'
     return 'Late night. The world is quiet. So can you be.'
   }
 
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     setTimezone(tz)
+    setMicroRitual(getMicroRitual(new Date().getHours()))
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
         fetch('/api/suntime', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude}) })
           .then(r=>r.json()).then(d=>{ if(d.sunrise){ setSunrise(d.sunrise); setSunset(d.sunset) } })
       })
     }
-    setMicroRitual(getMicroRitual())
   }, [])
 
   useEffect(() => {
@@ -166,6 +160,20 @@ export default function HiveClock() {
     if (secs>0) { setTimerSeconds(secs); setTimerRunning(true); setTimerDone(false) }
   }
 
+  const addCity = async () => {
+    if (!cityInput.trim()) return
+    setCityLoading(true)
+    try {
+      const res = await fetch('/api/timezone', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({city: cityInput}) })
+      const data = await res.json()
+      if (data.timezone && data.name) {
+        setWorldCities(prev => [...prev.filter(c=>c.name!==data.name), { name: data.name, tz: data.timezone }])
+        setCityInput('')
+      }
+    } catch {}
+    setCityLoading(false)
+  }
+
   const anticipate = (q: string) => {
     const ql = q.toLowerCase()
     if (ql.includes('tokyo')||ql.includes('japan')) setSuggestion('What time is it in Osaka?')
@@ -193,9 +201,11 @@ export default function HiveClock() {
     try {
       const res = await fetch('/api/clockface', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt: facePrompt}) })
       const data = await res.json()
-      if (data.imageUrl) setFaceImage(data.imageUrl)
-      else setFaceImage('')
-    } catch { }
+      if (data.imageUrl) {
+        setFaceImage(data.imageUrl)
+        setIsAnalog(true)
+      }
+    } catch {}
     setFaceLoading(false)
   }
 
@@ -207,7 +217,7 @@ export default function HiveClock() {
 
         <div style={{textAlign:'center'}}>
           <div style={{fontSize:'12px', color:accent, marginBottom:'8px'}}>
-            {mode==='wind'?'🌙 wind down':mode==='wake'?'🌅 wake up':'🐝 your time companion'} · {getMoonPhase()} · {sunrise&&`☀️ ${sunrise} — ${sunset}`}
+            {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()} · {sunrise && `☀️ ${sunrise} — ${sunset}`}
           </div>
 
           {isAnalog
@@ -269,30 +279,21 @@ export default function HiveClock() {
           <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
               {worldTimes.map(c => (
-                <div key={c.name} style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'14px', padding:'14px 18px'}}>
+                <div key={c.name} style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'14px', padding:'14px 18px', position:'relative'}}>
+                  <button onClick={()=>setWorldCities(prev=>prev.filter(w=>w.name!==c.name))} style={{position:'absolute', top:'8px', right:'8px', background:'none', border:'none', color:'#1a3a5c', cursor:'pointer', fontSize:'14px'}}>×</button>
                   <div style={{fontSize:'12px', color:'#2a5a7a', marginBottom:'4px'}}>{c.period==='night'?'🌙':'☀️'} {c.name}</div>
                   <div style={{fontSize:'26px', fontWeight:'700', fontVariantNumeric:'tabular-nums'}}>{c.time}</div>
                 </div>
               ))}
             </div>
-            <button onClick={()=>setShowCityPicker(!showCityPicker)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'12px', padding:'10px', color:accent, fontSize:'13px', cursor:'pointer'}}>
-              {showCityPicker ? 'Close' : 'Customise cities'}
-            </button>
-            {showCityPicker && (
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px'}}>
-                {ALL_CITIES.map(c => {
-                  const selected = worldCities.some(w=>w.name===c.name)
-                  return (
-                    <button key={c.name} onClick={()=>{
-                      if (selected) setWorldCities(prev=>prev.filter(w=>w.name!==c.name))
-                      else if (worldCities.length<6) setWorldCities(prev=>[...prev,c])
-                    }} style={{background:selected?accent:'#0a1a2e', border:`1px solid ${selected?accent:'#1a3a5c'}`, borderRadius:'10px', padding:'8px 12px', color:selected?'#fff':'#4a7fa5', fontSize:'13px', cursor:'pointer'}}>
-                      {c.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+            <div style={{display:'flex', gap:'8px'}}>
+              <input type='text' value={cityInput} onChange={e=>setCityInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addCity()} placeholder='Add any city in the world...'
+                style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
+              <button onClick={addCity} disabled={cityLoading||!cityInput.trim()} style={{background:cityLoading?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'70px'}}>
+                {cityLoading?'...':'Add'}
+              </button>
+            </div>
+            <div style={{fontSize:'11px', color:'#1a3a5c', textAlign:'center'}}>Type any city, town, or place — AI will find the timezone</div>
           </div>
         )}
 
@@ -326,18 +327,18 @@ export default function HiveClock() {
 
         {tab==='face' && (
           <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI will generate it.</div>
-            <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "underwater coral reef"</div>
+            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI will generate it and apply it instantly.</div>
+            <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "underwater coral reef" · "vintage steam punk"</div>
             <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleGenerateFace()} placeholder='Describe your clock face...'
               style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
             <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
-              {faceLoading?'Generating your clock face...':'Generate face'}
+              {faceLoading?'Generating your clock face... (30 seconds)':'Generate face'}
             </button>
             {faceImage && (
               <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
-                <img src={faceImage} alt='Generated clock face' style={{width:'100%', maxWidth:'300px', borderRadius:'50%', border:`3px solid ${accent}`}}/>
-                <button onClick={()=>setIsAnalog(true)} style={{background:`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'10px 24px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer'}}>Apply to analog clock</button>
-                <button onClick={()=>setFaceImage('')} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear</button>
+                <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
+                <div style={{fontSize:'12px', color:'#4a7fa5'}}>Applied to your analog clock ✓</div>
+                <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
               </div>
             )}
           </div>
