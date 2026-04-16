@@ -82,7 +82,7 @@ export default function HiveClock() {
   const [exampleIndex, setExampleIndex] = useState(0)
   const [timezone, setTimezone] = useState('UTC')
   const [showSupport, setShowSupport] = useState(false)
-  const [tab, setTab] = useState<'clock'|'world'|'timer'|'face'|'observance'>('clock')
+  const [tab, setTab] = useState<'clock'|'world'|'timer'|'observance'|'face'>('clock')
   const [is24h, setIs24h] = useState(false)
   const [isAnalog, setIsAnalog] = useState(false)
   const [worldCities, setWorldCities] = useState(DEFAULT_CITIES)
@@ -99,6 +99,7 @@ export default function HiveClock() {
   const [sunset, setSunset] = useState('')
   const [sunrisePercent, setSunrisePercent] = useState(0)
   const [sunsetPercent, setSunsetPercent] = useState(0)
+  const [locationGranted, setLocationGranted] = useState(false)
   const [facePrompt, setFacePrompt] = useState('')
   const [faceImage, setFaceImage] = useState('')
   const [faceLoading, setFaceLoading] = useState(false)
@@ -154,6 +155,7 @@ export default function HiveClock() {
       navigator.geolocation.getCurrentPosition(pos => {
         setUserLat(pos.coords.latitude)
         setUserLon(pos.coords.longitude)
+        setLocationGranted(true)
         fetch('/api/suntime', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -172,6 +174,8 @@ export default function HiveClock() {
               setSunsetPercent(timeToPercent(d.sunset))
             }
           })
+      }, () => {
+        setLocationGranted(false)
       })
     }
   }, [])
@@ -332,21 +336,21 @@ export default function HiveClock() {
             <div style={{position:'relative', height:'6px', background:'#0d1a2a', borderRadius:'8px'}}>
               <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
               {sunrisePercent > 0 && (
-                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10, pointerEvents:'none'}}>
-                  <div style={{width:'3px', height:'26px', background:'#f9cb42', borderRadius:'2px', boxShadow:'0 0 8px #f9cb42', opacity:1}}/>
+                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10}}>
+                  <div style={{width:'3px', height:'26px', background:'#f9cb42', borderRadius:'2px', boxShadow:'0 0 8px #f9cb42'}}/>
                 </div>
               )}
               {sunsetPercent > 0 && (
-                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10, pointerEvents:'none'}}>
-                  <div style={{width:'3px', height:'26px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 8px #e8593c', opacity:1}}/>
+                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10}}>
+                  <div style={{width:'3px', height:'26px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 8px #e8593c'}}/>
                 </div>
               )}
             </div>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'10px', marginTop:'10px'}}>
               <span style={{color:'#1a3a5c'}}>midnight</span>
-              {sunrise && <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span>}
+              {sunrise ? <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>allow location for sunrise</span>}
               <span style={{color:'#1a3a5c'}}>noon</span>
-              {sunset && <span style={{color:'#e8593c'}}>🌇 {sunset}</span>}
+              {sunset ? <span style={{color:'#e8593c'}}>🌇 {sunset}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>and sunset times</span>}
               <span style={{color:'#1a3a5c'}}>midnight</span>
             </div>
           </div>
@@ -355,9 +359,9 @@ export default function HiveClock() {
         </div>
 
         <div style={{display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap'}}>
-          {(['clock','world','timer','face','observance'] as const).map(t => (
+          {(['clock','world','timer','observance','face'] as const).map(t => (
             <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 14px', borderRadius:'20px', border:'none', background:tab===t?accent:'#0d1f35', color:tab===t?'#fff':'#4a7fa5', fontSize:'12px', cursor:'pointer', fontWeight:tab===t?'600':'400'}}>
-              {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':t==='face'?'🎨 Face':'🕌 Observance'}
+              {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':t==='observance'?'🕌 Observance':'🎨 Face'}
             </button>
           ))}
         </div>
@@ -432,6 +436,45 @@ export default function HiveClock() {
           </div>
         )}
 
+        {tab==='observance' && (
+          <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
+            {!locationGranted && <div style={{fontSize:'12px', color:'#c87a20', textAlign:'center', background:'#1a0f00', borderRadius:'10px', padding:'10px'}}>Allow location access in your browser for precise observance times</div>}
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+              {PRESET_OBSERVANCES.map(o => (
+                <button key={o.id} onClick={()=>loadObservance(o.id)}
+                  style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
+                  <span style={{fontSize:'22px'}}>{o.emoji}</span>
+                  <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
+                  <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
+              <div style={{fontSize:'12px', color:'#2a5a7a'}}>Or describe your own observance, practice, or tradition:</div>
+              <div style={{display:'flex', gap:'8px'}}>
+                <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
+                  style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
+                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'80px'}}>
+                  {observanceLoading?'...':'Look up'}
+                </button>
+              </div>
+            </div>
+            {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
+            {observanceTimes.length > 0 && (
+              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
+                <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
+                {observanceTimes.map((t, i) => (
+                  <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
+                    <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
+                    <span style={{color:accent, fontSize:'15px', fontWeight:'600', fontVariantNumeric:'tabular-nums'}}>{t.time}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab==='face' && (
           <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
             <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI generates it and applies it instantly.</div>
@@ -468,45 +511,6 @@ export default function HiveClock() {
                 <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
               </div>
             )}
-          </div>
-        )}
-
-        {tab==='observance' && (
-          <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-              {PRESET_OBSERVANCES.map(o => (
-                <button key={o.id} onClick={()=>loadObservance(o.id)}
-                  style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
-                  <span style={{fontSize:'22px'}}>{o.emoji}</span>
-                  <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
-                  <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{borderTop:'1px solid #0d1f35', paddingTop:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
-              <div style={{fontSize:'12px', color:'#2a5a7a'}}>Or describe your own observance, practice, or tradition:</div>
-              <div style={{display:'flex', gap:'8px'}}>
-                <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
-                  style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
-                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'80px'}}>
-                  {observanceLoading?'...':'Look up'}
-                </button>
-              </div>
-            </div>
-            {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
-            {observanceTimes.length > 0 && (
-              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
-                <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
-                {observanceTimes.map((t, i) => (
-                  <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
-                    <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
-                    <span style={{color:accent, fontSize:'15px', fontWeight:'600', fontVariantNumeric:'tabular-nums'}}>{t.time}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {!userLat && <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Location access required for precise times</div>}
           </div>
         )}
 
