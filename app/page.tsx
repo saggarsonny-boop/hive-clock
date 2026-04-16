@@ -11,6 +11,8 @@ const EXAMPLES = [
   'Should I sleep now?',
   'Quelle heure est-il à Paris?',
   'كم الساعة الآن في دبي؟',
+  '¿Cuánto falta para el amanecer?',
+  'Hoe laat is zonsopgang morgen?',
 ]
 
 const DEFAULT_CITIES = [
@@ -23,6 +25,13 @@ const DEFAULT_CITIES = [
 ]
 
 const MOON_PHASES = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘']
+
+const OBSERVANCES = [
+  { id: 'islam', label: 'Islam', emoji: '☪️', description: 'Daily prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha)' },
+  { id: 'judaism', label: 'Judaism', emoji: '✡️', description: 'Shabbat candle lighting and Havdalah times' },
+  { id: 'sunrise', label: 'Sun follower', emoji: '🌞', description: 'Sunrise, solar noon, sunset, twilight' },
+  { id: 'moon', label: 'Lunar', emoji: '🌕', description: 'Moon phases and lunar calendar' },
+]
 
 function getMoonPhase() {
   const now = new Date()
@@ -59,7 +68,7 @@ export default function HiveClock() {
   const [exampleIndex, setExampleIndex] = useState(0)
   const [timezone, setTimezone] = useState('UTC')
   const [showSupport, setShowSupport] = useState(false)
-  const [tab, setTab] = useState<'clock'|'world'|'timer'|'face'>('clock')
+  const [tab, setTab] = useState<'clock'|'world'|'timer'|'face'|'observance'>('clock')
   const [is24h, setIs24h] = useState(false)
   const [isAnalog, setIsAnalog] = useState(false)
   const [worldCities, setWorldCities] = useState(DEFAULT_CITIES)
@@ -77,9 +86,16 @@ export default function HiveClock() {
   const [facePrompt, setFacePrompt] = useState('')
   const [faceImage, setFaceImage] = useState('')
   const [faceLoading, setFaceLoading] = useState(false)
+  const [faceStopped, setFaceStopped] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [microRitual, setMicroRitual] = useState('')
+  const [userLat, setUserLat] = useState<number|null>(null)
+  const [userLon, setUserLon] = useState<number|null>(null)
+  const [observanceTimes, setObservanceTimes] = useState<{name:string,time:string}[]>([])
+  const [selectedObservance, setSelectedObservance] = useState('')
+  const [observanceLoading, setObservanceLoading] = useState(false)
   const timerRef = useRef<NodeJS.Timeout|null>(null)
+  const faceAbortRef = useRef<AbortController|null>(null)
 
   const getBg = () => {
     if (mode === 'wind') return 'linear-gradient(135deg, #0a0510 0%, #100a20 100%)'
@@ -108,6 +124,8 @@ export default function HiveClock() {
     setMicroRitual(getMicroRitual(new Date().getHours()))
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
+        setUserLat(pos.coords.latitude)
+        setUserLon(pos.coords.longitude)
         fetch('/api/suntime', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:pos.coords.latitude, lon:pos.coords.longitude}) })
           .then(r=>r.json()).then(d=>{ if(d.sunrise){ setSunrise(d.sunrise); setSunset(d.sunset) } })
       })
@@ -197,16 +215,43 @@ export default function HiveClock() {
 
   const handleGenerateFace = async () => {
     if (!facePrompt.trim()) return
-    setFaceLoading(true); setFaceImage('')
+    setFaceLoading(true); setFaceImage(''); setFaceStopped(false)
+    faceAbortRef.current = new AbortController()
     try {
-      const res = await fetch('/api/clockface', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt: facePrompt}) })
+      const res = await fetch('/api/clockface', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({prompt: facePrompt}),
+        signal: faceAbortRef.current.signal
+      })
       const data = await res.json()
-      if (data.imageUrl) {
-        setFaceImage(data.imageUrl)
-        setIsAnalog(true)
-      }
-    } catch {}
+      if (data.imageUrl) { setFaceImage(data.imageUrl); setIsAnalog(true) }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') setFaceStopped(true)
+    }
     setFaceLoading(false)
+  }
+
+  const handleStopFace = () => {
+    faceAbortRef.current?.abort()
+    setFaceLoading(false)
+    setFaceStopped(true)
+  }
+
+  const loadObservance = async (id: string) => {
+    if (!userLat || !userLon) {
+      alert('Please allow location access to use observance times')
+      return
+    }
+    setSelectedObservance(id)
+    setObservanceLoading(true)
+    setObservanceTimes([])
+    try {
+      const res = await fetch('/api/observance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:userLat, lon:userLon, tradition:id}) })
+      const data = await res.json()
+      if (data.times) setObservanceTimes(data.times)
+    } catch {}
+    setObservanceLoading(false)
   }
 
   const accent = getAccent()
@@ -217,7 +262,7 @@ export default function HiveClock() {
 
         <div style={{textAlign:'center'}}>
           <div style={{fontSize:'12px', color:accent, marginBottom:'8px'}}>
-            {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()} · {sunrise && `☀️ ${sunrise} — ${sunset}`}
+            {mode==='wind' ? '🌙 wind down' : mode==='wake' ? '🌅 wake up' : '🐝 your time companion'} · {getMoonPhase()} {sunrise && `· ☀️ ${sunrise} 🌇 ${sunset}`}
           </div>
 
           {isAnalog
@@ -248,9 +293,9 @@ export default function HiveClock() {
         </div>
 
         <div style={{display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap'}}>
-          {(['clock','world','timer','face'] as const).map(t => (
-            <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 14px', borderRadius:'20px', border:'none', background:tab===t?accent:'#0d1f35', color:tab===t?'#fff':'#4a7fa5', fontSize:'13px', cursor:'pointer', fontWeight:tab===t?'600':'400'}}>
-              {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':'🎨 Face'}
+          {(['clock','world','timer','face','observance'] as const).map(t => (
+            <button key={t} onClick={()=>setTab(t)} style={{padding:'6px 14px', borderRadius:'20px', border:'none', background:tab===t?accent:'#0d1f35', color:tab===t?'#fff':'#4a7fa5', fontSize:'12px', cursor:'pointer', fontWeight:tab===t?'600':'400'}}>
+              {t==='clock'?'🕐 Ask':t==='world'?'🌍 World':t==='timer'?'⏱ Timer':t==='face'?'🎨 Face':'🕌 Observance'}
             </button>
           ))}
         </div>
@@ -327,13 +372,21 @@ export default function HiveClock() {
 
         {tab==='face' && (
           <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI will generate it and apply it instantly.</div>
-            <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "underwater coral reef" · "vintage steam punk"</div>
-            <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleGenerateFace()} placeholder='Describe your clock face...'
+            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI generates it and applies it instantly.</div>
+            <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "steampunk gears" · "underwater coral"</div>
+            <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!faceLoading&&handleGenerateFace()} placeholder='Describe your clock face...'
               style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
-            <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
-              {faceLoading?'Generating your clock face... (30 seconds)':'Generate face'}
-            </button>
+            <div style={{display:'flex', gap:'8px'}}>
+              <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
+                {faceLoading?'Generating... (up to 30s)':'Generate face'}
+              </button>
+              {faceLoading && (
+                <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>
+                  Stop
+                </button>
+              )}
+            </div>
+            {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
             {faceImage && (
               <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
                 <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
@@ -341,6 +394,34 @@ export default function HiveClock() {
                 <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
               </div>
             )}
+          </div>
+        )}
+
+        {tab==='observance' && (
+          <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+            <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance for precise times based on your location.</div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+              {OBSERVANCES.map(o => (
+                <button key={o.id} onClick={()=>loadObservance(o.id)}
+                  style={{background:selectedObservance===o.id?accent:'#0a1a2e', border:`1px solid ${selectedObservance===o.id?accent:'#1a3a5c'}`, borderRadius:'14px', padding:'16px', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:'6px'}}>
+                  <span style={{fontSize:'24px'}}>{o.emoji}</span>
+                  <span style={{fontSize:'14px', fontWeight:'600', color:selectedObservance===o.id?'#fff':'#c8e0f0'}}>{o.label}</span>
+                  <span style={{fontSize:'11px', color:selectedObservance===o.id?'rgba(255,255,255,0.7)':'#2a5a7a'}}>{o.description}</span>
+                </button>
+              ))}
+            </div>
+            {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
+            {observanceTimes.length > 0 && (
+              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
+                {observanceTimes.map((t, i) => (
+                  <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
+                    <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
+                    <span style={{color:accent, fontSize:'15px', fontWeight:'600', fontVariantNumeric:'tabular-nums'}}>{t.time}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!userLat && <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Location access required for precise times</div>}
           </div>
         )}
 
