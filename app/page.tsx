@@ -33,6 +33,8 @@ const PRESET_OBSERVANCES = [
   { id: 'moon', label: 'Lunar', emoji: '🌕', description: 'Moon phase and cycle' },
 ]
 
+const FACE_LIMIT = 3
+
 function getMoonPhase() {
   const now = new Date()
   const known = new Date(2000, 0, 6)
@@ -43,12 +45,13 @@ function getMoonPhase() {
 
 function timeToPercent(timeStr: string): number {
   if (!timeStr) return 0
-  const parts = timeStr.split(':')
+  const clean = timeStr.replace(/[AP]M/i, '').trim()
+  const parts = clean.split(':')
   let h = parseInt(parts[0])
   const m = parseInt(parts[1] || '0')
-  const ampm = timeStr.toLowerCase()
-  if (ampm.includes('pm') && h !== 12) h += 12
-  if (ampm.includes('am') && h === 12) h = 0
+  const upper = timeStr.toUpperCase()
+  if (upper.includes('PM') && h !== 12) h += 12
+  if (upper.includes('AM') && h === 12) h = 0
   return (h * 60 + m) / 1440 * 100
 }
 
@@ -94,12 +97,13 @@ export default function HiveClock() {
   const [mode, setMode] = useState<'day'|'wind'|'wake'>('day')
   const [sunrise, setSunrise] = useState('')
   const [sunset, setSunset] = useState('')
-  const [sunrisePercent, setSunrisePercent] = useState(25)
-  const [sunsetPercent, setSunsetPercent] = useState(75)
+  const [sunrisePercent, setSunrisePercent] = useState(0)
+  const [sunsetPercent, setSunsetPercent] = useState(0)
   const [facePrompt, setFacePrompt] = useState('')
   const [faceImage, setFaceImage] = useState('')
   const [faceLoading, setFaceLoading] = useState(false)
   const [faceStopped, setFaceStopped] = useState(false)
+  const [faceCount, setFaceCount] = useState(0)
   const [suggestion, setSuggestion] = useState('')
   const [microRitual, setMicroRitual] = useState('')
   const [userLat, setUserLat] = useState<number|null>(null)
@@ -136,6 +140,16 @@ export default function HiveClock() {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     setTimezone(tz)
     setMicroRitual(getMicroRitual(new Date().getHours()))
+    const savedCount = parseInt(localStorage.getItem('faceCount') || '0')
+    const savedDate = localStorage.getItem('faceDate') || ''
+    const today = new Date().toDateString()
+    if (savedDate !== today) {
+      localStorage.setItem('faceCount', '0')
+      localStorage.setItem('faceDate', today)
+      setFaceCount(0)
+    } else {
+      setFaceCount(savedCount)
+    }
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
         setUserLat(pos.coords.latitude)
@@ -235,7 +249,7 @@ export default function HiveClock() {
   }
 
   const handleGenerateFace = async () => {
-    if (!facePrompt.trim()) return
+    if (!facePrompt.trim() || faceCount >= FACE_LIMIT) return
     setFaceLoading(true); setFaceImage(''); setFaceStopped(false)
     faceAbortRef.current = new AbortController()
     try {
@@ -245,7 +259,14 @@ export default function HiveClock() {
         signal: faceAbortRef.current.signal
       })
       const data = await res.json()
-      if (data.imageUrl) { setFaceImage(data.imageUrl); setIsAnalog(true) }
+      if (data.imageUrl) {
+        setFaceImage(data.imageUrl)
+        setIsAnalog(true)
+        const newCount = faceCount + 1
+        setFaceCount(newCount)
+        localStorage.setItem('faceCount', String(newCount))
+        localStorage.setItem('faceDate', new Date().toDateString())
+      }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') setFaceStopped(true)
     }
@@ -270,6 +291,7 @@ export default function HiveClock() {
   }
 
   const accent = getAccent()
+  const faceLimitReached = faceCount >= FACE_LIMIT
 
   return (
     <main style={{minHeight:'100vh', background:getBg(), color:'#e8f4ff', fontFamily:'system-ui, sans-serif', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 20px', transition:'background 2s'}}>
@@ -297,30 +319,30 @@ export default function HiveClock() {
             </button>
           </div>
 
-          <div style={{marginTop:'12px', position:'relative'}}>
-            <div style={{background:'#0d1a2a', borderRadius:'8px', height:'6px', overflow:'visible', position:'relative'}}>
+          <div style={{marginTop:'16px', position:'relative', padding:'12px 0'}}>
+            <div style={{position:'relative', height:'6px', background:'#0d1a2a', borderRadius:'8px'}}>
               <div style={{height:'100%', width:`${dayPercent}%`, background:`linear-gradient(90deg, ${accent}, #e8f4ff)`, borderRadius:'8px', transition:'width 1s'}}/>
-              {sunrise && (
-                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-4px', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center'}}>
-                  <div style={{width:'2px', height:'14px', background:'#f9cb42', borderRadius:'1px'}}/>
+              {sunrisePercent > 0 && (
+                <div style={{position:'absolute', left:`${sunrisePercent}%`, top:'-8px', transform:'translateX(-50%)', zIndex:2}}>
+                  <div style={{width:'3px', height:'22px', background:'#f9cb42', borderRadius:'2px', boxShadow:'0 0 6px #f9cb42'}}/>
                 </div>
               )}
-              {sunset && (
-                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-4px', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center'}}>
-                  <div style={{width:'2px', height:'14px', background:'#c87a20', borderRadius:'1px'}}/>
+              {sunsetPercent > 0 && (
+                <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-8px', transform:'translateX(-50%)', zIndex:2}}>
+                  <div style={{width:'3px', height:'22px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 6px #e8593c'}}/>
                 </div>
               )}
             </div>
-            <div style={{display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#1a3a5c', marginTop:'4px'}}>
-              <span>midnight</span>
-              {sunrise && <span style={{color:'#f9cb42', fontSize:'10px'}}>☀️ {sunrise}</span>}
-              <span>noon</span>
-              {sunset && <span style={{color:'#c87a20', fontSize:'10px'}}>🌇 {sunset}</span>}
-              <span>midnight</span>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'10px', marginTop:'8px'}}>
+              <span style={{color:'#1a3a5c'}}>midnight</span>
+              {sunrise && <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span>}
+              <span style={{color:'#1a3a5c'}}>noon</span>
+              {sunset && <span style={{color:'#e8593c'}}>🌇 {sunset}</span>}
+              <span style={{color:'#1a3a5c'}}>midnight</span>
             </div>
           </div>
 
-          <div style={{marginTop:'10px', fontSize:'13px', color:'#2a5a7a', fontStyle:'italic'}}>{microRitual}</div>
+          <div style={{fontSize:'13px', color:'#2a5a7a', fontStyle:'italic'}}>{microRitual}</div>
         </div>
 
         <div style={{display:'flex', gap:'6px', justifyContent:'center', flexWrap:'wrap'}}>
@@ -405,17 +427,31 @@ export default function HiveClock() {
           <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
             <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Describe your dream clock face. AI generates it and applies it instantly.</div>
             <div style={{fontSize:'12px', color:'#1a3a5c', textAlign:'center'}}>Try: "minimalist Japanese ink" · "cosmic nebula" · "Art Deco gold" · "steampunk gears" · "underwater coral"</div>
-            <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!faceLoading&&handleGenerateFace()} placeholder='Describe your clock face...'
-              style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
-            <div style={{display:'flex', gap:'8px'}}>
-              <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
-                {faceLoading?'Generating... (up to 30s)':'Generate face'}
-              </button>
-              {faceLoading && (
-                <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
-              )}
-            </div>
-            {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
+            {faceLimitReached ? (
+              <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', padding:'20px', textAlign:'center', display:'flex', flexDirection:'column', gap:'12px'}}>
+                <p style={{color:'#c8e0f0', fontSize:'14px', margin:0}}>You've used your 3 free face generations today. Support HiveClock to generate more.</p>
+                <div style={{display:'flex', gap:'8px', justifyContent:'center', flexWrap:'wrap'}}>
+                  <a href='https://buy.stripe.com/14A6oJ6Mv3sReEa0YV0RG00' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$1.99 / month</a>
+                  <a href='https://buy.stripe.com/7sYcN79YHe7v53AcHD0RG01' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$19 / year</a>
+                  <a href='https://buy.stripe.com/9B6aEZ7Qzd3rcw2bDz0RG02' target='_blank' rel='noopener noreferrer' style={{background:'#0d1f35', border:`1px solid ${accent}`, borderRadius:'10px', padding:'10px 16px', color:'#c8e0f0', fontSize:'13px', textDecoration:'none', fontWeight:'500'}}>$5 one-time</a>
+                </div>
+                <p style={{color:'#2a5a7a', fontSize:'12px', margin:0}}>Resets tomorrow. Everything else on HiveClock is always free.</p>
+              </div>
+            ) : (
+              <>
+                <input type='text' value={facePrompt} onChange={e=>setFacePrompt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!faceLoading&&handleGenerateFace()} placeholder='Describe your clock face...'
+                  style={{width:'100%', background:'#0d1f35', border:`1px solid #1a3a5c`, borderRadius:'16px', padding:'16px 20px', color:'#e8f4ff', fontSize:'16px', outline:'none', boxSizing:'border-box'}}/>
+                <div style={{display:'flex', gap:'8px'}}>
+                  <button onClick={handleGenerateFace} disabled={faceLoading||!facePrompt.trim()} style={{flex:1, background:faceLoading||!facePrompt.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'16px', padding:'16px', color:faceLoading||!facePrompt.trim()?'#2a4a6a':'#e8f4ff', fontSize:'16px', fontWeight:'600', cursor:faceLoading||!facePrompt.trim()?'not-allowed':'pointer'}}>
+                    {faceLoading?`Generating... (up to 30s)`:`Generate face (${FACE_LIMIT - faceCount} left today)`}
+                  </button>
+                  {faceLoading && (
+                    <button onClick={handleStopFace} style={{background:'#3a0a0a', border:'1px solid #7a2a2a', borderRadius:'16px', padding:'16px 20px', color:'#f87171', fontSize:'15px', cursor:'pointer', fontWeight:'600'}}>Stop</button>
+                  )}
+                </div>
+                {faceStopped && <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Generation stopped. Try a different description.</div>}
+              </>
+            )}
             {faceImage && (
               <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
                 <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
@@ -444,7 +480,7 @@ export default function HiveClock() {
               <div style={{display:'flex', gap:'8px'}}>
                 <input type='text' value={customObservance} onChange={e=>setCustomObservance(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadObservance('custom',customObservance)} placeholder='e.g. Zoroastrian, Pagan, Hindu, Wiccan, Druid...'
                   style={{flex:1, background:'#0d1f35', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', outline:'none'}}/>
-                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'70px'}}>
+                <button onClick={()=>loadObservance('custom',customObservance)} disabled={!customObservance.trim()||observanceLoading} style={{background:!customObservance.trim()?'#0d1f35':`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'12px 16px', color:'#e8f4ff', fontSize:'14px', cursor:'pointer', fontWeight:'600', minWidth:'80px'}}>
                   {observanceLoading?'...':'Look up'}
                 </button>
               </div>
