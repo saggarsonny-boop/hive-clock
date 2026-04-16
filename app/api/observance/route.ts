@@ -11,8 +11,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const res = await fetch(`https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`)
       const data = await res.json()
       const t = data.data.timings
+      const date = data.data.date.readable
       return NextResponse.json({
         tradition: 'Islam',
+        date,
         times: [
           { name: 'Fajr', time: t.Fajr },
           { name: 'Sunrise', time: t.Sunrise },
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         name: i.title,
         time: new Date(i.date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
       })) || []
-      return NextResponse.json({ tradition: 'Judaism', times })
+      return NextResponse.json({ tradition: 'Judaism', date: today.toDateString(), times })
     }
 
     if (tradition === 'sunrise') {
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const fmt = (d: string) => new Date(d).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
       return NextResponse.json({
         tradition: 'Sun follower',
+        date: new Date().toDateString(),
         times: [
           { name: 'Astronomical dawn', time: fmt(r.astronomical_twilight_begin) },
           { name: 'Nautical dawn', time: fmt(r.nautical_twilight_begin) },
@@ -70,6 +73,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const daysToFull = cycle < 14.765 ? Math.round(14.765 - cycle) : Math.round(29.53 - cycle + 14.765)
       return NextResponse.json({
         tradition: 'Lunar',
+        date: now.toDateString(),
         times: [
           { name: 'Current phase', time: phase },
           { name: 'Day in cycle', time: `Day ${daysInCycle} of 29` },
@@ -85,27 +89,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const sunrise = new Date(r.sunrise).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
       const sunset = new Date(r.sunset).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
       const solarNoon = new Date(r.solar_noon).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
-
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 500,
-        system: `You are a sacred time calculator. Given a tradition or practice, return the key observance times for today based on the sun data provided. Return ONLY a JSON array of objects with "name" and "time" fields. No markdown, no explanation.`,
-        messages: [{
-          role: 'user',
-          content: `Tradition: ${custom}
-Today's sun data: sunrise ${sunrise}, solar noon ${solarNoon}, sunset ${sunset}
-Location: latitude ${lat}, longitude ${lon}
-
-Return the key observance times for this tradition today as a JSON array. Include 3-8 times relevant to this tradition.`
-        }]
+        system: 'You are a sacred time calculator. Given a tradition, return key observance times as a JSON array of objects with "name" and "time" fields only. No markdown, no explanation, raw JSON array only.',
+        messages: [{ role: 'user', content: `Tradition: ${custom}\nSunrise: ${sunrise}, Solar noon: ${solarNoon}, Sunset: ${sunset}\nLocation: ${lat}, ${lon}\nReturn 3-8 observance times as JSON array.` }]
       })
-
       const raw = response.content[0].type === 'text' ? response.content[0].text : '[]'
       const times = JSON.parse(raw)
-      return NextResponse.json({ tradition: custom, times })
+      return NextResponse.json({ tradition: custom, date: new Date().toDateString(), times })
     }
 
-    return NextResponse.json({ tradition: 'custom', times: [] })
+    return NextResponse.json({ tradition: 'custom', date: new Date().toDateString(), times: [] })
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }

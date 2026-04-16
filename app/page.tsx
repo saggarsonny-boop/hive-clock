@@ -73,7 +73,7 @@ function AnalogClock({ time, accent, faceImage, size }: { time: Date, accent: st
   const cx = size / 2
   return (
     <div style={{position:'relative', width:`${size}px`, height:`${size}px`, margin:'0 auto'}}>
-      <div style={{position:'absolute', inset:0, borderRadius:'50%', border:`3px solid`, borderColor:'var(--accent)', background: faceImage ? `url(${faceImage}) center/cover` : '#0a1a2e', overflow:'hidden'}}>
+      <div style={{position:'absolute', inset:0, borderRadius:'50%', border:`3px solid ${accent}`, background: faceImage ? `url(${faceImage}) center/cover` : '#0a1a2e', overflow:'hidden'}}>
         {!faceImage && Array.from({length:12},(_,i) => (
           <div key={i} style={{position:'absolute', width:'2px', height:`${size*0.07}px`, background:accent, left:'50%', top:`${size*0.03}px`, transformOrigin:`1px ${size*0.47}px`, transform:`rotate(${i*30}deg)`, marginLeft:'-1px'}}/>
         ))}
@@ -124,9 +124,11 @@ export default function HiveClock() {
   const [userLat, setUserLat] = useState<number|null>(null)
   const [userLon, setUserLon] = useState<number|null>(null)
   const [observanceTimes, setObservanceTimes] = useState<{name:string,time:string}[]>([])
+  const [observanceDate, setObservanceDate] = useState('')
   const [selectedObservance, setSelectedObservance] = useState('')
   const [observanceLoading, setObservanceLoading] = useState(false)
   const [customObservance, setCustomObservance] = useState('')
+  const [shareMsg, setShareMsg] = useState('')
   const [ready, setReady] = useState(false)
   const timerRef = useRef<NodeJS.Timeout|null>(null)
   const faceAbortRef = useRef<AbortController|null>(null)
@@ -156,7 +158,6 @@ export default function HiveClock() {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     setTimezone(tz)
     setMicroRitual(getMicroRitual(new Date().getHours()))
-
     setIs24h(load('is24h', false))
     setIsAnalog(load('isAnalog', true))
     setWorldCities(load('worldCities', DEFAULT_CITIES))
@@ -166,40 +167,24 @@ export default function HiveClock() {
     if (so) setSelectedObservance(so)
     const co = load('customObservance', '')
     if (co) setCustomObservance(co)
-
     const savedCount = parseInt(load('faceCount', '0'))
     const savedDate = load('faceDate', '')
     const today = new Date().toDateString()
     if (savedDate !== today) {
-      save('faceCount', '0')
-      save('faceDate', today)
-      setFaceCount(0)
-    } else {
-      setFaceCount(savedCount)
-    }
-
+      save('faceCount', '0'); save('faceDate', today); setFaceCount(0)
+    } else { setFaceCount(savedCount) }
     const tooltipSeen = localStorage.getItem('hc_tooltip_seen')
     if (!tooltipSeen) setTimeout(() => setShowTooltip(true), 3000)
-
     setReady(true)
-
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(pos => {
         setUserLat(pos.coords.latitude)
         setUserLon(pos.coords.longitude)
         setLocationGranted(true)
-        fetch('/api/suntime', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude, tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
-        }).then(r => r.json()).then(d => {
-          if (d.sunrise) {
-            setSunrise(d.sunrise)
-            setSunset(d.sunset)
-            setSunrisePercent(timeToPercent(d.sunrise))
-            setSunsetPercent(timeToPercent(d.sunset))
-          }
-        })
+        fetch('/api/suntime', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }) })
+          .then(r => r.json()).then(d => {
+            if (d.sunrise) { setSunrise(d.sunrise); setSunset(d.sunset); setSunrisePercent(timeToPercent(d.sunrise)); setSunsetPercent(timeToPercent(d.sunset)) }
+          })
       }, () => setLocationGranted(false))
     }
   }, [])
@@ -304,8 +289,7 @@ export default function HiveClock() {
       })
       const data = await res.json()
       if (data.imageUrl) {
-        setFaceImage(data.imageUrl)
-        setIsAnalog(true)
+        setFaceImage(data.imageUrl); setIsAnalog(true)
         const newCount = faceCount + 1
         setFaceCount(newCount)
         save('faceCount', String(newCount))
@@ -329,9 +313,40 @@ export default function HiveClock() {
     try {
       const res = await fetch('/api/observance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lat:userLat, lon:userLon, tradition:id, custom}) })
       const data = await res.json()
-      if (data.times) setObservanceTimes(data.times)
+      if (data.times) { setObservanceTimes(data.times); setObservanceDate(data.date || '') }
     } catch {}
     setObservanceLoading(false)
+  }
+
+  const shareObservance = () => {
+    const label = selectedObservance === 'custom' ? customObservance : selectedObservance
+    const lines = observanceTimes.map(t => `${t.name}: ${t.time}`).join('\n')
+    const text = `${label} times for ${observanceDate}\n\n${lines}\n\nvia HiveClock — hive-clock.vercel.app`
+    if (navigator.share) {
+      navigator.share({ title: `${label} times`, text })
+    } else {
+      navigator.clipboard.writeText(text)
+      setShareMsg('Copied to clipboard')
+      setTimeout(() => setShareMsg(''), 2000)
+    }
+  }
+
+  const shareFace = () => {
+    const text = `I made this clock face with HiveClock 🕐✨\n\nGenerate yours free at hive-clock.vercel.app`
+    if (navigator.share && faceImage) {
+      fetch(faceImage).then(r => r.blob()).then(blob => {
+        const file = new File([blob], 'hiveclock-face.jpg', { type: 'image/jpeg' })
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ title: 'My HiveClock face', text, files: [file] })
+        } else {
+          navigator.share({ title: 'My HiveClock face', text, url: 'https://hive-clock.vercel.app' })
+        }
+      })
+    } else {
+      navigator.clipboard.writeText(text)
+      setShareMsg('Copied to clipboard')
+      setTimeout(() => setShareMsg(''), 2000)
+    }
   }
 
   const dismissTooltip = () => {
@@ -373,15 +388,9 @@ export default function HiveClock() {
           <div style={{fontSize:'12px', color:'#2a4a6a', marginTop:'2px'}}>{timezone}</div>
 
           <div style={{display:'flex', gap:'8px', justifyContent:'center', marginTop:'10px'}}>
-            <button onClick={()=>setIsAnalog(!isAnalog)} style={{background: isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: isAnalog ? '#fff' : accent, fontSize:'12px', cursor:'pointer'}}>
-              Analog
-            </button>
-            <button onClick={()=>setIsAnalog(!isAnalog)} style={{background: !isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: !isAnalog ? '#fff' : '#4a7fa5', fontSize:'12px', cursor:'pointer'}}>
-              Digital
-            </button>
-            <button onClick={()=>setIs24h(!is24h)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color:'#4a7fa5', fontSize:'12px', cursor:'pointer'}}>
-              {is24h ? '12h' : '24h'}
-            </button>
+            <button onClick={()=>setIsAnalog(true)} style={{background: isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: isAnalog ? '#fff' : '#4a7fa5', fontSize:'12px', cursor:'pointer'}}>Analog</button>
+            <button onClick={()=>setIsAnalog(false)} style={{background: !isAnalog ? accent : 'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color: !isAnalog ? '#fff' : '#4a7fa5', fontSize:'12px', cursor:'pointer'}}>Digital</button>
+            <button onClick={()=>setIs24h(!is24h)} style={{background:'none', border:`1px solid #1a3a5c`, borderRadius:'20px', padding:'4px 12px', color:'#4a7fa5', fontSize:'12px', cursor:'pointer'}}>{is24h ? '12h' : '24h'}</button>
           </div>
 
           <div style={{marginTop:'16px', position:'relative', padding:'8px 0'}}>
@@ -508,7 +517,7 @@ export default function HiveClock() {
 
             {tab==='observance' && (
               <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-                <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance or describe your own for precise times based on your location.</div>
+                <div style={{fontSize:'13px', color:'#2a5a7a', textAlign:'center'}}>Select your observance for precise times based on your location.</div>
                 {!locationGranted && <div style={{fontSize:'12px', color:'#c87a20', textAlign:'center', background:'#1a0f00', borderRadius:'10px', padding:'10px'}}>Allow location access for precise observance times</div>}
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
                   {PRESET_OBSERVANCES.map(o => (
@@ -533,7 +542,12 @@ export default function HiveClock() {
                 {observanceLoading && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'14px'}}>Loading times for your location...</div>}
                 {observanceTimes.length > 0 && (
                   <div style={{background:'#0a1a2e', border:'1px solid #1a3a5c', borderRadius:'16px', overflow:'hidden'}}>
-                    <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</div>
+                    <div style={{padding:'12px 20px', borderBottom:'1px solid #0d1f35', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span style={{fontSize:'12px', color:'#2a5a7a', textTransform:'uppercase', letterSpacing:'0.08em'}}>{selectedObservance === 'custom' ? customObservance : selectedObservance}</span>
+                      <button onClick={shareObservance} style={{background:`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'10px', padding:'6px 14px', color:'#fff', fontSize:'12px', cursor:'pointer', fontWeight:'600'}}>
+                        Share ↗
+                      </button>
+                    </div>
                     {observanceTimes.map((t, i) => (
                       <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'14px 20px', borderBottom: i < observanceTimes.length-1 ? '1px solid #0d1f35' : 'none'}}>
                         <span style={{color:'#c8e0f0', fontSize:'15px'}}>{t.name}</span>
@@ -542,6 +556,7 @@ export default function HiveClock() {
                     ))}
                   </div>
                 )}
+                {shareMsg && <div style={{textAlign:'center', color:'#4a7fa5', fontSize:'13px'}}>{shareMsg}</div>}
               </div>
             )}
 
@@ -577,8 +592,11 @@ export default function HiveClock() {
                 {faceImage && (
                   <div style={{display:'flex', flexDirection:'column', gap:'12px', alignItems:'center'}}>
                     <img src={faceImage} alt='Generated clock face' style={{width:'200px', height:'200px', borderRadius:'50%', border:`3px solid ${accent}`, objectFit:'cover'}}/>
-                    <div style={{fontSize:'12px', color:'#4a7fa5'}}>Applied to your analog clock ✓</div>
-                    <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'none', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear face</button>
+                    <div style={{display:'flex', gap:'8px'}}>
+                      <button onClick={shareFace} style={{background:`linear-gradient(135deg, ${accent}, #1e6aa5)`, border:'none', borderRadius:'12px', padding:'10px 20px', color:'#fff', fontSize:'14px', cursor:'pointer', fontWeight:'600'}}>Share this face ↗</button>
+                      <button onClick={()=>{setFaceImage('');setIsAnalog(false)}} style={{background:'none', border:'1px solid #1a3a5c', borderRadius:'12px', padding:'10px 16px', color:'#2a5a7a', fontSize:'13px', cursor:'pointer'}}>Clear</button>
+                    </div>
+                    {shareMsg && <div style={{color:'#4a7fa5', fontSize:'13px'}}>{shareMsg}</div>}
                   </div>
                 )}
               </div>
