@@ -207,7 +207,7 @@ export default function HiveClock() {
 
         <div style={{textAlign:'center'}}>
           <div style={{fontSize:'12px', color:accent, marginBottom:'8px'}}>
-            {mode==='wind'?'🌙 wind down':'mode'==='wake'?'🌅 wake up':'🐝 your time companion'} · {getMoonPhase()} · {sunrise&&`☀️ ${sunrise} — ${sunset}`}
+            {mode==='wind'?'🌙 wind down':mode==='wake'?'🌅 wake up':'🐝 your time companion'} · {getMoonPhase()} · {sunrise&&`☀️ ${sunrise} — ${sunset}`}
           </div>
 
           {isAnalog
