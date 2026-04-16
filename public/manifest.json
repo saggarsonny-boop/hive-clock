@@ -1,0 +1,24 @@
+{
+  "name": "HiveClock",
+  "short_name": "HiveClock",
+  "description": "The world's most humane clock. By Hive.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060a14",
+  "theme_color": "#060a14",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
