@@ -342,7 +342,7 @@ export default function HiveClock() {
               )}
               {sunsetPercent > 0 && (
                 <div style={{position:'absolute', left:`${sunsetPercent}%`, top:'-10px', transform:'translateX(-50%)', zIndex:10}}>
-                  <div style={{width:'3px', height:'26px', background:'#e8593c', borderRadius:'2px', boxShadow:'0 0 8px #e8593c'}}/>
+                  <div style={{width:'3px', height:'26px', background:'#8b5cf6', borderRadius:'2px', boxShadow:'0 0 8px #8b5cf6'}}/>
                 </div>
               )}
             </div>
@@ -350,7 +350,7 @@ export default function HiveClock() {
               <span style={{color:'#1a3a5c'}}>midnight</span>
               {sunrise ? <span style={{color:'#f9cb42'}}>☀️ {sunrise}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>allow location for sunrise</span>}
               <span style={{color:'#1a3a5c'}}>noon</span>
-              {sunset ? <span style={{color:'#e8593c'}}>🌇 {sunset}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>and sunset times</span>}
+              {sunset ? <span style={{color:'#8b5cf6'}}>🌇 {sunset}</span> : <span style={{color:'#1a3a5c', fontStyle:'italic'}}>and sunset times</span>}
               <span style={{color:'#1a3a5c'}}>midnight</span>
             </div>
           </div>
