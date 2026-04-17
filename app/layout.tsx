@@ -41,6 +41,10 @@ function HiveFooter() {
         <a href="https://buy.stripe.com/9B6aEZ7Qzd3rcw2bDz0RG02" target="_blank" rel="noopener noreferrer"
           style={{ fontSize: "11px", color: "rgba(212,175,55,0.5)", textDecoration: "none" }}>$5 one-time</a>
       </div>
+      <form action="https://hive.baby" method="get" style={{ marginTop: "16px", display: "flex", gap: "8px", justifyContent: "center" }}>
+        <input name="q" type="text" placeholder="Find another engine…" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", color: "rgba(255,255,255,0.45)", outline: "none", width: "180px" }} />
+        <button type="submit" style={{ background: "none", border: "1px solid rgba(212,175,55,0.25)", borderRadius: "6px", padding: "6px 10px", fontSize: "12px", color: "rgba(212,175,55,0.45)", cursor: "pointer" }}>→</button>
+      </form>
     </footer>
   );
 }
