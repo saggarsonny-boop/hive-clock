@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import AutoDemo from './components/AutoDemo'
 import FirstVisitCard from './components/FirstVisitCard'
 import LanguageSelector, { getLang, withLang } from './components/LanguageSelector'
+import TooltipTour from './components/TooltipTour'
 
 const EXAMPLES = [
   'What time is it in Tokyo right now?',
@@ -372,6 +373,11 @@ export default function HiveClock() {
       <AutoDemo />
       <FirstVisitCard />
       <LanguageSelector />
+      <TooltipTour engineId="hiveclock" tips={[
+        { label: "Ask anything", text: "Type any time, timezone, or prayer schedule question in plain language." },
+        { label: "Response", text: "Gives you precise times, countdowns, or conversions — no lookup needed." },
+        { label: "Language selector", text: "Bottom-right — switch language and your answer comes back in that language." },
+      ]} />
       <div style={{width:'100%', maxWidth:'620px', display:'flex', flexDirection:'column', gap:'20px'}}>
 
         <div style={{textAlign:'center'}}>
