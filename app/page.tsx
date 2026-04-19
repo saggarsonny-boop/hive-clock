@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import AutoDemo from './components/AutoDemo'
 
 const EXAMPLES = [
   'What time is it in Tokyo right now?',
@@ -366,6 +367,7 @@ export default function HiveClock() {
 
   return (
     <main style={{minHeight:'100vh', background:getBg(), color:'#e8f4ff', fontFamily:'system-ui, sans-serif', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 20px', transition:'background 2s'}}>
+      <AutoDemo />
       <div style={{width:'100%', maxWidth:'620px', display:'flex', flexDirection:'column', gap:'20px'}}>
 
         <div style={{textAlign:'center'}}>
