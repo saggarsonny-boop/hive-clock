@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import AutoDemo from './components/AutoDemo'
 import FirstVisitCard from './components/FirstVisitCard'
+import LanguageSelector, { getLang, withLang } from './components/LanguageSelector'
 
 const EXAMPLES = [
   'What time is it in Tokyo right now?',
@@ -271,7 +272,7 @@ export default function HiveClock() {
     if (!input.trim()) return
     setLoading(true); setAnswer(''); setSuggestion('')
     try {
-      const res = await fetch('/api/clock', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({input, timezone}) })
+      const res = await fetch('/api/clock', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({input: withLang(input, getLang()), timezone}) })
       const data = await res.json()
       setAnswer(data.answer || data.error)
       anticipate(input)
@@ -370,6 +371,7 @@ export default function HiveClock() {
     <main style={{minHeight:'100vh', background:getBg(), color:'#e8f4ff', fontFamily:'system-ui, sans-serif', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 20px', transition:'background 2s'}}>
       <AutoDemo />
       <FirstVisitCard />
+      <LanguageSelector />
       <div style={{width:'100%', maxWidth:'620px', display:'flex', flexDirection:'column', gap:'20px'}}>
 
         <div style={{textAlign:'center'}}>
