@@ -1,0 +1,6 @@
+{
+  "engine": {
+    "name": "hive-clock"
+  },
+  "greeting": "[es] Welcome to hive-clock"
+}
